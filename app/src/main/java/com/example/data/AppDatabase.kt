@@ -17,6 +17,8 @@ data class Meeting(
     val minutesContent: String = "", // Notulen mentah
     val attendeesList: String = "", // Nama-nama yang hadir
     val aiSummary: String = "", // Ringkasan otomatis dari Gemini
+    val category: String = "Rapat Intern", // Kategori kegiatan (e.g., "Rapat Paripurna", "Rapat Komisi", etc.)
+    val attendanceStatus: String = "", // format "recipientId:status;recipientId:status;..."
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -68,7 +70,7 @@ interface RecipientDao {
     suspend fun deleteRecipientById(id: Int)
 }
 
-@Database(entities = [Meeting::class, Recipient::class], version = 1, exportSchema = false)
+@Database(entities = [Meeting::class, Recipient::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun meetingDao(): MeetingDao
     abstract fun recipientDao(): RecipientDao

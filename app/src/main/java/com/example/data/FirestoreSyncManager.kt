@@ -52,7 +52,8 @@ object FirestoreSyncManager {
         context: Context,
         scope: CoroutineScope,
         repository: AppRepository,
-        onLog: (String) -> Unit
+        onLog: (String) -> Unit,
+        onNotificationTriggered: (title: String, body: String, type: String) -> Unit = { _, _, _ -> }
     ) {
         initialize(context, onLog)
         val db = firestore ?: run {
@@ -93,6 +94,8 @@ object FirestoreSyncManager {
                                     val minutesContent = doc.getString("minutesContent") ?: ""
                                     val attendeesList = doc.getString("attendeesList") ?: ""
                                     val aiSummary = doc.getString("aiSummary") ?: ""
+                                    val category = doc.getString("category") ?: "Rapat Intern"
+                                    val attendanceStatus = doc.getString("attendanceStatus") ?: ""
                                     val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
 
                                     val meeting = Meeting(
@@ -107,20 +110,47 @@ object FirestoreSyncManager {
                                         minutesContent = minutesContent,
                                         attendeesList = attendeesList,
                                         aiSummary = aiSummary,
+                                        category = category,
+                                        attendanceStatus = attendanceStatus,
                                         timestamp = timestamp
                                     )
 
                                     when (dc.type) {
-                                        DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> {
+                                        DocumentChange.Type.ADDED -> {
                                             if (!isLocal) {
                                                 repository.insertMeeting(meeting)
                                                 withContext(Dispatchers.Main) {
                                                     onLog("Live-Sync [Hadir]: Agenda '${meeting.title}' disinkronkan ke HP Anggota Dewan!")
-                                                    com.example.ui.NotificationHelper.showNotification(
-                                                        context,
-                                                        if (dc.type == DocumentChange.Type.ADDED) "Agenda Rapat Baru" else "Pembaruan Agenda Rapat",
-                                                        "${meeting.title} - ${meeting.date} pukul ${meeting.time} di ${meeting.location}"
-                                                    )
+                                                    val notifTitle = "Agenda Rapat Baru"
+                                                    val notifBody = "${meeting.title} - ${meeting.date} pukul ${meeting.time} di ${meeting.location}"
+                                                    com.example.ui.NotificationHelper.showNotification(context, notifTitle, notifBody)
+                                                    onNotificationTriggered(notifTitle, notifBody, "NEW_MEETING")
+                                                }
+                                            }
+                                        }
+                                        DocumentChange.Type.MODIFIED -> {
+                                            if (!isLocal) {
+                                                val existing = repository.getMeetingById(meeting.id)
+                                                val isScheduleChanged = existing != null && (
+                                                    existing.date != meeting.date ||
+                                                    existing.time != meeting.time ||
+                                                    existing.location != meeting.location
+                                                )
+                                                
+                                                repository.insertMeeting(meeting)
+                                                withContext(Dispatchers.Main) {
+                                                    onLog("Live-Sync [Hadir]: Agenda '${meeting.title}' disinkronkan ke HP Anggota Dewan!")
+                                                    if (isScheduleChanged && existing != null) {
+                                                        val notifTitle = "Perubahan Jadwal Rapat!"
+                                                        val notifBody = "Jadwal '${meeting.title}' BERUBAH: ${meeting.date} pukul ${meeting.time} di ${meeting.location} (Sebelumnya: ${existing.date} • ${existing.time})"
+                                                        com.example.ui.NotificationHelper.showNotification(context, notifTitle, notifBody)
+                                                        onNotificationTriggered(notifTitle, notifBody, "SCHEDULE_CHANGE")
+                                                    } else {
+                                                        val notifTitle = "Pembaruan Agenda Rapat"
+                                                        val notifBody = "${meeting.title} - ${meeting.date} pukul ${meeting.time} di ${meeting.location}"
+                                                        com.example.ui.NotificationHelper.showNotification(context, notifTitle, notifBody)
+                                                        onNotificationTriggered(notifTitle, notifBody, "INFO")
+                                                    }
                                                 }
                                             }
                                         }
@@ -225,6 +255,8 @@ object FirestoreSyncManager {
             "minutesContent" to meeting.minutesContent,
             "attendeesList" to meeting.attendeesList,
             "aiSummary" to meeting.aiSummary,
+            "category" to meeting.category,
+            "attendanceStatus" to meeting.attendanceStatus,
             "timestamp" to meeting.timestamp
         )
 

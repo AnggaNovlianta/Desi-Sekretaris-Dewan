@@ -206,6 +206,11 @@ fun MinutesScreen(
                 val isGeneratingState by viewModel.isGeneratingAi.collectAsState()
                 val liveAiResult by viewModel.aiResult.collectAsState()
 
+                // New States for local enhancements
+                val recipients by viewModel.recipientsState.collectAsState()
+                var selectedStyle by remember { mutableStateOf("Formal") }
+                var showAttendancePicker by remember { mutableStateOf(false) }
+                
                 AlertDialog(
                     onDismissRequest = { 
                         selectedMeetingForNotes = null
@@ -231,7 +236,7 @@ fun MinutesScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 450.dp),
+                                .heightIn(max = 480.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             // Secondary Tabs
@@ -256,27 +261,189 @@ fun MinutesScreen(
 
                             if (activeTab == 0) {
                                 // Manual notes fields
-                                OutlinedTextField(
-                                    value = attendees,
-                                    onValueChange = { if (userRole == "SEKWAN") attendees = it },
-                                    readOnly = userRole != "SEKWAN",
-                                    label = { Text("Daftar Hadir Sidang/Rapat") },
-                                    placeholder = { Text("Contoh: H. Sutarno (Ketua), Drs. Aris (Sekda)...") },
-                                    leadingIcon = { Icon(Icons.Default.People, contentDescription = null) },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                OutlinedTextField(
-                                    value = notesContent,
-                                    onValueChange = { if (userRole == "SEKWAN") notesContent = it },
-                                    readOnly = userRole != "SEKWAN",
-                                    label = { Text("Hasil Pembahasan Rapat (Jalannya Sidang)") },
-                                    placeholder = { Text("Masukkan draf pembahasan secara berurutan atau poin kasar...") },
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f),
-                                    minLines = 4
-                                )
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = attendees,
+                                            onValueChange = { if (userRole == "SEKWAN") attendees = it },
+                                            readOnly = userRole != "SEKWAN",
+                                            label = { Text("Daftar Hadir Sidang/Rapat") },
+                                            placeholder = { Text("Contoh: H. Sutarno (Ketua), Drs. Aris (Sekda)...") },
+                                            leadingIcon = { Icon(Icons.Default.People, contentDescription = null) },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        if (userRole == "SEKWAN" && recipients.isNotEmpty()) {
+                                            IconButton(
+                                                onClick = { showAttendancePicker = !showAttendancePicker },
+                                                colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                            ) {
+                                                Icon(Icons.Default.PlaylistAddCheck, contentDescription = "Pilih Hadir")
+                                            }
+                                        }
+                                    }
+
+                                    // Interactive Attendance Picker Drawer
+                                    if (showAttendancePicker && userRole == "SEKWAN") {
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("Daftar Anggota DPRD Prabumulih:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                    TextButton(onClick = { showAttendancePicker = false }) {
+                                                        Text("Selesai & Tutup", style = MaterialTheme.typography.labelSmall)
+                                                    }
+                                                }
+                                                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Box(modifier = Modifier.heightIn(max = 120.dp)) {
+                                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                        items(recipients) { recipient ->
+                                                            val isChecked = attendees.contains(recipient.name)
+                                                            Row(
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .clickable {
+                                                                        if (isChecked) {
+                                                                            val list = attendees.split(",")
+                                                                                .map { it.trim() }
+                                                                                .filter { it.isNotEmpty() && it != recipient.name }
+                                                                            attendees = list.joinToString(", ")
+                                                                        } else {
+                                                                            val list = attendees.split(",")
+                                                                                .map { it.trim() }
+                                                                                .filter { it.isNotEmpty() }
+                                                                                .toMutableList()
+                                                                            if (!list.contains(recipient.name)) {
+                                                                                list.add(recipient.name)
+                                                                            }
+                                                                            attendees = list.joinToString(", ")
+                                                                        }
+                                                                    }
+                                                                    .padding(vertical = 2.dp),
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Checkbox(
+                                                                    checked = isChecked,
+                                                                    onCheckedChange = { _ ->
+                                                                        if (isChecked) {
+                                                                            val list = attendees.split(",")
+                                                                                .map { it.trim() }
+                                                                                .filter { it.isNotEmpty() && it != recipient.name }
+                                                                            attendees = list.joinToString(", ")
+                                                                        } else {
+                                                                            val list = attendees.split(",")
+                                                                                .map { it.trim() }
+                                                                                .filter { it.isNotEmpty() }
+                                                                                .toMutableList()
+                                                                            if (!list.contains(recipient.name)) {
+                                                                                list.add(recipient.name)
+                                                                            }
+                                                                            attendees = list.joinToString(", ")
+                                                                        }
+                                                                    }
+                                                                )
+                                                                Column {
+                                                                    Text(recipient.name, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                                                    Text("${recipient.role} • ${recipient.partyOrFaction}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontSize = 9.sp)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Quorum Meter
+                                    if (recipients.isNotEmpty()) {
+                                        val totalRecipients = recipients.size
+                                        val presentCount = recipients.count { attendees.contains(it.name) }
+                                        val quorumRatio = if (totalRecipients > 0) (presentCount.toFloat() / totalRecipients) else 0f
+                                        val quorumPercent = (quorumRatio * 100).toInt()
+                                        val isQuorumReached = quorumPercent >= 50
+
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (isQuorumReached) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+                                            ),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isQuorumReached) Color(0xFF81C784) else Color(0xFFFFB74D))
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = if (isQuorumReached) Icons.Default.CheckCircle else Icons.Default.Info,
+                                                            contentDescription = null,
+                                                            tint = if (isQuorumReached) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            text = "Kalkulator Kuorum DPRD",
+                                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                            color = if (isQuorumReached) Color(0xFF1B5E20) else Color(0xFFE65100)
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = "$quorumPercent% Sidang",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = if (isQuorumReached) Color(0xFF1B5E20) else Color(0xFFE65100)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = if (isQuorumReached) 
+                                                        "Kuorum Terpenuhi ($presentCount/$totalRecipients hadir). Keputusan sidang bersifat sah secara hukum." 
+                                                        else "Belum Kuorum ($presentCount/$totalRecipients hadir). Diperlukan minimal ${totalRecipients/2 + 1} anggota.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = if (isQuorumReached) Color(0xFF2E7D32) else Color(0xFFD84315),
+                                                    fontSize = 10.sp
+                                                )
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                LinearProgressIndicator(
+                                                    progress = quorumRatio,
+                                                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                                    color = if (isQuorumReached) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                                                    trackColor = if (isQuorumReached) Color(0xFFC8E6C9) else Color(0xFFFFE0B2)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    OutlinedTextField(
+                                        value = notesContent,
+                                        onValueChange = { if (userRole == "SEKWAN") notesContent = it },
+                                        readOnly = userRole != "SEKWAN",
+                                        label = { Text("Hasil Pembahasan Rapat (Jalannya Sidang)") },
+                                        placeholder = { Text("Masukkan draf pembahasan secara berurutan atau poin kasar...") },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f),
+                                        minLines = 4
+                                    )
+                                }
                             } else {
                                 // AI Section
                                 if (isGeneratingState) {
@@ -300,13 +467,36 @@ fun MinutesScreen(
                                         verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         if (userRole == "SEKWAN") {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text("Gaya Rangkuman:", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
+                                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    val styleList = listOf("Formal" to "Resmi", "Humas" to "Humas", "Aksi" to "Daftar Tugas")
+                                                    styleList.forEach { (key, label) ->
+                                                        val isSelected = selectedStyle == key
+                                                        FilterChip(
+                                                            selected = isSelected,
+                                                            onClick = { selectedStyle = key },
+                                                            label = { Text(label, fontSize = 10.sp) },
+                                                            colors = FilterChipDefaults.filterChipColors(
+                                                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                                                selectedLabelColor = MaterialTheme.colorScheme.primary
+                                                            )
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            
                                             Button(
                                                 onClick = {
                                                     if (notesContent.isBlank()) {
                                                         ToastUtils.show(context, "Silakan isi Catatan Kasar Jalannya Sidang terlebih dahulu.")
                                                     } else {
                                                         viewModel.generateMinutesSummary(
-                                                            meeting.title, meeting.date, attendees, notesContent
+                                                            meeting.title, meeting.date, attendees, notesContent, selectedStyle
                                                         )
                                                     }
                                                 },
@@ -398,6 +588,31 @@ fun MinutesScreen(
                                 ) {
                                     Icon(Icons.Default.Share, contentDescription = "Bagikan", tint = Color.White)
                                 }
+
+                                Button(
+                                    onClick = {
+                                        val finalSummary = liveAiResult.ifEmpty { meeting.aiSummary }
+                                        val currentMeeting = meeting.copy(
+                                            aiSummary = finalSummary,
+                                            minutesContent = notesContent,
+                                            attendeesList = attendees
+                                        )
+                                        com.example.ui.PdfExporter.exportMeetingMinutesToPdf(context, currentMeeting)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondary,
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.testTag("button_export_pdf_existing")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PictureAsPdf,
+                                        contentDescription = "Ekspor PDF",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Ekspor PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
 
                             if (userRole == "SEKWAN") {
@@ -438,7 +653,7 @@ fun MinutesScreen(
                             onClick = { 
                                 selectedMeetingForNotes = null
                                 viewModel.clearAiResult()
-                            }
+                             }
                         ) {
                             Text("Tutup")
                         }
@@ -457,6 +672,10 @@ fun MinutesScreen(
                 val isGeneratingState by viewModel.isGeneratingAi.collectAsState()
                 val liveAiResult by viewModel.aiResult.collectAsState()
 
+                val recipients by viewModel.recipientsState.collectAsState()
+                var showAddAttendancePicker by remember { mutableStateOf(false) }
+                var localSelectedStyle by remember { mutableStateOf("Formal") }
+
                 AlertDialog(
                     onDismissRequest = { 
                         showAddMinutesDialog = false
@@ -473,7 +692,7 @@ fun MinutesScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 450.dp),
+                                .heightIn(max = 480.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             // Secondary Tabs
@@ -569,14 +788,169 @@ fun MinutesScreen(
                                         }
                                     }
 
-                                    OutlinedTextField(
-                                        value = localAttendees,
-                                        onValueChange = { localAttendees = it },
-                                        label = { Text("Daftar Hadir (Komposisi Peserta)") },
-                                        placeholder = { Text("Siapa saja yang menghadiri...") },
-                                        leadingIcon = { Icon(Icons.Default.People, contentDescription = null) },
-                                        modifier = Modifier.fillMaxWidth().testTag("input_new_minutes_attendees")
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = localAttendees,
+                                            onValueChange = { localAttendees = it },
+                                            label = { Text("Daftar Hadir (Komposisi Peserta)") },
+                                            placeholder = { Text("Siapa saja yang menghadiri...") },
+                                            leadingIcon = { Icon(Icons.Default.People, contentDescription = null) },
+                                            modifier = Modifier.weight(1f).testTag("input_new_minutes_attendees")
+                                        )
+                                        if (recipients.isNotEmpty()) {
+                                            IconButton(
+                                                onClick = { showAddAttendancePicker = !showAddAttendancePicker },
+                                                colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                            ) {
+                                                Icon(Icons.Default.PlaylistAddCheck, contentDescription = "Pilih Hadir")
+                                            }
+                                        }
+                                    }
+
+                                    // Attendance checklist
+                                    if (showAddAttendancePicker) {
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("Daftar Anggota DPRD Prabumulih:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                    TextButton(onClick = { showAddAttendancePicker = false }) {
+                                                        Text("Selesai & Tutup", style = MaterialTheme.typography.labelSmall)
+                                                    }
+                                                }
+                                                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Box(modifier = Modifier.heightIn(max = 120.dp)) {
+                                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                        items(recipients) { recipient ->
+                                                            val isChecked = localAttendees.contains(recipient.name)
+                                                            Row(
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .clickable {
+                                                                        if (isChecked) {
+                                                                            val list = localAttendees.split(",")
+                                                                                .map { it.trim() }
+                                                                                .filter { it.isNotEmpty() && it != recipient.name }
+                                                                            localAttendees = list.joinToString(", ")
+                                                                        } else {
+                                                                            val list = localAttendees.split(",")
+                                                                                .map { it.trim() }
+                                                                                .filter { it.isNotEmpty() }
+                                                                                .toMutableList()
+                                                                            if (!list.contains(recipient.name)) {
+                                                                                list.add(recipient.name)
+                                                                            }
+                                                                            localAttendees = list.joinToString(", ")
+                                                                        }
+                                                                    }
+                                                                    .padding(vertical = 2.dp),
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Checkbox(
+                                                                    checked = isChecked,
+                                                                    onCheckedChange = { _ ->
+                                                                        if (isChecked) {
+                                                                            val list = localAttendees.split(",")
+                                                                                .map { it.trim() }
+                                                                                .filter { it.isNotEmpty() && it != recipient.name }
+                                                                            localAttendees = list.joinToString(", ")
+                                                                        } else {
+                                                                            val list = localAttendees.split(",")
+                                                                                .map { it.trim() }
+                                                                                .filter { it.isNotEmpty() }
+                                                                                .toMutableList()
+                                                                            if (!list.contains(recipient.name)) {
+                                                                                list.add(recipient.name)
+                                                                            }
+                                                                            localAttendees = list.joinToString(", ")
+                                                                        }
+                                                                    }
+                                                                )
+                                                                Column {
+                                                                    Text(recipient.name, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                                                    Text("${recipient.role} • ${recipient.partyOrFaction}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontSize = 9.sp)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Quorum Calculator
+                                    if (recipients.isNotEmpty()) {
+                                        val totalRecipients = recipients.size
+                                        val presentCount = recipients.count { localAttendees.contains(it.name) }
+                                        val quorumRatio = if (totalRecipients > 0) (presentCount.toFloat() / totalRecipients) else 0f
+                                        val quorumPercent = (quorumRatio * 100).toInt()
+                                        val isQuorumReached = quorumPercent >= 50
+
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (isQuorumReached) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+                                            ),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isQuorumReached) Color(0xFF81C784) else Color(0xFFFFB74D))
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = if (isQuorumReached) Icons.Default.CheckCircle else Icons.Default.Info,
+                                                            contentDescription = null,
+                                                            tint = if (isQuorumReached) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            text = "Kalkulator Kuorum DPRD",
+                                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                            color = if (isQuorumReached) Color(0xFF1B5E20) else Color(0xFFE65100)
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = "$quorumPercent% Sidang",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = if (isQuorumReached) Color(0xFF1B5E20) else Color(0xFFE65100)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = if (isQuorumReached) 
+                                                        "Kuorum Terpenuhi ($presentCount/$totalRecipients hadir). Keputusan sidang bersifat sah secara hukum." 
+                                                        else "Belum Kuorum ($presentCount/$totalRecipients hadir). Diperlukan minimal ${totalRecipients/2 + 1} anggota.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = if (isQuorumReached) Color(0xFF2E7D32) else Color(0xFFD84315),
+                                                    fontSize = 10.sp
+                                                )
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                LinearProgressIndicator(
+                                                    progress = quorumRatio,
+                                                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                                    color = if (isQuorumReached) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                                                    trackColor = if (isQuorumReached) Color(0xFFC8E6C9) else Color(0xFFFFE0B2)
+                                                )
+                                            }
+                                        }
+                                    }
 
                                     OutlinedTextField(
                                         value = localNotesContent,
@@ -612,6 +986,29 @@ fun MinutesScreen(
                                             .weight(1f),
                                         verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Gaya Rangkuman:", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
+                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                val styleList = listOf("Formal" to "Resmi", "Humas" to "Humas", "Aksi" to "Daftar Tugas")
+                                                styleList.forEach { (key, label) ->
+                                                    val isSelected = localSelectedStyle == key
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = { localSelectedStyle = key },
+                                                        label = { Text(label, fontSize = 10.sp) },
+                                                        colors = FilterChipDefaults.filterChipColors(
+                                                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        }
+
                                         Button(
                                             onClick = {
                                                 if (localTitle.isBlank()) {
@@ -620,7 +1017,7 @@ fun MinutesScreen(
                                                     ToastUtils.show(context, "Silakan isi Jalannya Sidang / Catatan terlebih dahulu.")
                                                 } else {
                                                     viewModel.generateMinutesSummary(
-                                                        localTitle, localDate.ifEmpty { "Hari Ini" }, localAttendees.ifEmpty { "Anggota Dewan" }, localNotesContent
+                                                        localTitle, localDate.ifEmpty { "Hari Ini" }, localAttendees.ifEmpty { "Anggota Dewan" }, localNotesContent, localSelectedStyle
                                                     )
                                                 }
                                             },
@@ -690,6 +1087,37 @@ fun MinutesScreen(
                                 ) {
                                     Icon(Icons.Default.Share, contentDescription = "Bagikan", tint = Color.White)
                                 }
+
+                                Button(
+                                    onClick = {
+                                        val currentMeeting = Meeting(
+                                            title = localTitle,
+                                            date = localDate.ifEmpty { AgendaDateUtils.formatDate(Calendar.getInstance()) },
+                                            time = "Lengkap",
+                                            location = localLocation.ifEmpty { "Ruang Rapat DPRD" },
+                                            agenda = "",
+                                            recipientGroup = "Selesai Rapat",
+                                            status = "SELESAI",
+                                            minutesContent = localNotesContent,
+                                            attendeesList = localAttendees,
+                                            aiSummary = liveAiResult
+                                        )
+                                        com.example.ui.PdfExporter.exportMeetingMinutesToPdf(context, currentMeeting)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondary,
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.testTag("button_export_pdf_new")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PictureAsPdf,
+                                        contentDescription = "Ekspor PDF",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Ekspor PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
 
                             Button(
@@ -717,7 +1145,7 @@ fun MinutesScreen(
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 modifier = Modifier.testTag("button_save_new_minutes")
-                            ) {
+                             ) {
                                 Text("Simpan & Selesai", color = Color.White)
                             }
                         }

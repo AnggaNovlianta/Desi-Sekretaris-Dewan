@@ -8,6 +8,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -114,6 +116,20 @@ fun AgendaScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedMeetingForDetail by remember { mutableStateOf<Meeting?>(null) }
 
+    // Custom Filters
+    var customDateFilter by remember { mutableStateOf<String?>(null) }
+    val categoryOptions = listOf(
+        "Rapat Paripurna",
+        "Rapat Komisi",
+        "Rapat Banmus & Banggar",
+        "Rapat Dengar Pendapat (RDP)",
+        "Hearing & Dialog",
+        "Kunjungan Kerja (Kunker)",
+        "Bimbingan Teknis (Bimtek)",
+        "Rapat Intern"
+    )
+    var selectedCategoryFilter by remember { mutableStateOf("Semua") }
+
     // Form states
     var title by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
@@ -121,6 +137,7 @@ fun AgendaScreen(
     var location by remember { mutableStateOf("") }
     var agenda by remember { mutableStateOf("") }
     var recipientGroup by remember { mutableStateOf("Seluruh Anggota DPRD") }
+    var categoryForm by remember { mutableStateOf("Rapat Intern") }
 
     val recipientOptions = listOf(
         "Seluruh Anggota DPRD",
@@ -148,6 +165,27 @@ fun AgendaScreen(
 
     val weekMeetings = remember(meetings) {
         meetings.filter { AgendaDateUtils.isThisWeek(it.date) }
+    }
+
+    // Base filtered list based on tabs
+    val baseMeetingsList = remember(selectedTab, todayMeetings, weekMeetings, meetings) {
+        when (selectedTab) {
+            0 -> todayMeetings
+            1 -> weekMeetings
+            else -> meetings
+        }
+    }
+
+    // Final list with custom category and custom date filters
+    val currentMeetingsList = remember(baseMeetingsList, customDateFilter, selectedCategoryFilter) {
+        var list = baseMeetingsList
+        if (customDateFilter != null) {
+            list = list.filter { it.date == customDateFilter }
+        }
+        if (selectedCategoryFilter != "Semua") {
+            list = list.filter { it.category == selectedCategoryFilter }
+        }
+        list
     }
 
     Scaffold(
@@ -189,7 +227,7 @@ fun AgendaScreen(
                                     .size(6.dp)
                                     .clip(RoundedCornerShape(3.dp))
                                     .background(Color(0xFF4CAF50))
-                            )
+                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Ter-Sync", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp), color = Color.White)
                         }
@@ -242,12 +280,134 @@ fun AgendaScreen(
                 )
             }
 
-            // Current List selection
-            val currentMeetingsList = when (selectedTab) {
-                0 -> todayMeetings
-                1 -> weekMeetings
-                else -> meetings
+            // Custom Filter Bar section below TabRow
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FilterList,
+                            contentDescription = "Filter",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Filter Agenda Dewan",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    // Custom Date Picker Filter Button
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (customDateFilter != null) {
+                            SuggestionChip(
+                                onClick = { customDateFilter = null },
+                                label = { 
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = customDateFilter!!.substringAfter(", ").ifEmpty { customDateFilter!! }, 
+                                            maxLines = 1, 
+                                            fontSize = 11.sp
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(12.dp))
+                                    }
+                                },
+                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                border = null,
+                                modifier = Modifier.testTag("clear_date_filter")
+                            )
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    val calendar = Calendar.getInstance()
+                                    val datePickerDialog = DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val selectedCal = Calendar.getInstance().apply {
+                                                set(Calendar.YEAR, year)
+                                                set(Calendar.MONTH, month)
+                                                set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                            }
+                                            customDateFilter = AgendaDateUtils.formatDate(selectedCal)
+                                        },
+                                        calendar.get(Calendar.YEAR),
+                                        calendar.get(Calendar.MONTH),
+                                        calendar.get(Calendar.DAY_OF_MONTH)
+                                    )
+                                    datePickerDialog.show()
+                                },
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                                    .testTag("trigger_date_filter")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarMonth,
+                                    contentDescription = "Filter Tanggal",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Scrollable Kategori Chips Row
+                val filterCategories = listOf("Semua") + categoryOptions
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    filterCategories.forEach { cat ->
+                        val isSelected = selectedCategoryFilter == cat
+                        val chipBg = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        val chipText = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        val chipBorderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+                        
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(chipBg)
+                                .border(1.dp, chipBorderColor, RoundedCornerShape(8.dp))
+                                .clickable { selectedCategoryFilter = cat }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .testTag("category_chip_$cat")
+                        ) {
+                            Text(
+                                text = cat,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = chipText
+                            )
+                        }
+                    }
+                }
             }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
             if (currentMeetingsList.isEmpty()) {
                 Column(
@@ -269,22 +429,30 @@ fun AgendaScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = when (selectedTab) {
-                            0 -> "Tidak ada agenda hari ini"
-                            1 -> "Tidak ada agenda pekan ini"
-                            else -> "Belum ada agenda terdaftar"
+                        text = if (customDateFilter != null || selectedCategoryFilter != "Semua") {
+                            "Tidak ada agenda yang cocok"
+                        } else {
+                            when (selectedTab) {
+                                0 -> "Tidak ada agenda hari ini"
+                                1 -> "Tidak ada agenda pekan ini"
+                                else -> "Belum ada agenda terdaftar"
+                            }
                         },
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Silakan klik tombol '+' untuk menjadwalkan agenda kerja atau hearing baru dewan.",
+                        text = if (customDateFilter != null || selectedCategoryFilter != "Semua") {
+                            "Coba ubah filter tanggal atau kategori kegiatan di atas."
+                        } else {
+                            "Silakan klik tombol '+' untuk menjadwalkan agenda kerja atau hearing baru dewan."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                         textAlign = TextAlign.Center
                     )
-                    if (userRole == "SEKWAN") {
+                    if (userRole == "SEKWAN" && customDateFilter == null && selectedCategoryFilter == "Semua") {
                         Spacer(modifier = Modifier.height(24.dp))
                         Button(
                             onClick = { showAddDialog = true },
@@ -331,6 +499,41 @@ fun AgendaScreen(
                                     .fillMaxWidth()
                                     .testTag("input_agenda_title")
                             )
+
+                            // Category Field dropdown
+                            var expandedCategory by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = categoryForm,
+                                    onValueChange = { categoryForm = it },
+                                    label = { Text("Kategori Kegiatan") },
+                                    leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { expandedCategory = !expandedCategory }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("input_agenda_category"),
+                                    readOnly = true
+                                )
+                                DropdownMenu(
+                                    expanded = expandedCategory,
+                                    onDismissRequest = { expandedCategory = false },
+                                    modifier = Modifier.fillMaxWidth(0.9f)
+                                ) {
+                                    categoryOptions.forEach { cat ->
+                                        DropdownMenuItem(
+                                            text = { Text(cat) },
+                                            onClick = {
+                                                categoryForm = cat
+                                                expandedCategory = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
 
                             // Date Field utilizing DatePickerDialog
                             Box(modifier = Modifier.fillMaxWidth()) {
@@ -489,6 +692,7 @@ fun AgendaScreen(
                                         location = location,
                                         agenda = agenda,
                                         recipientGroup = recipientGroup,
+                                        category = categoryForm,
                                         status = "DRAFT"
                                     )
                                     viewModel.saveMeeting(newAgenda)
@@ -499,6 +703,7 @@ fun AgendaScreen(
                                     time = ""
                                     location = ""
                                     agenda = ""
+                                    categoryForm = "Rapat Intern"
                                     recipientGroup = "Seluruh Anggota DPRD"
                                     ToastUtils.show(context, "Agenda telah dijadwalkan")
                                 }
@@ -536,6 +741,15 @@ fun AgendaScreen(
                                 .heightIn(max = 400.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Category, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text("Kategori Kegiatan", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                    Text(meeting.category, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -627,6 +841,43 @@ fun AgendaItemCard(
                 .fillMaxWidth()
                 .padding(14.dp)
         ) {
+            // Category tag and title row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val categoryColor = when (meeting.category) {
+                    "Rapat Paripurna" -> Color(0xFFE53935)
+                    "Rapat Komisi" -> Color(0xFF1E88E5)
+                    "Rapat Banmus & Banggar" -> Color(0xFF8E24AA)
+                    "Rapat Dengar Pendapat (RDP)" -> Color(0xFFF4511E)
+                    "Hearing & Dialog" -> Color(0xFF43A047)
+                    "Kunjungan Kerja (Kunker)" -> Color(0xFF00ACC1)
+                    "Bimbingan Teknis (Bimtek)" -> Color(0xFF3949AB)
+                    else -> Color(0xFF757575)
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(categoryColor.copy(alpha = 0.12f))
+                        .border(1.dp, categoryColor.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = meeting.category,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        ),
+                        color = categoryColor
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically

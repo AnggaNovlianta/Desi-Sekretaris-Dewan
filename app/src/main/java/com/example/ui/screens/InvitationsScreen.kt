@@ -30,6 +30,41 @@ import com.example.data.Recipient
 import com.example.ui.theme.GoldAccent
 import com.example.ui.viewmodel.DesiViewModel
 
+// Helper functions for attendance serialization
+fun parseAttendanceStatus(serialized: String): Map<Int, String> {
+    if (serialized.isBlank()) return emptyMap()
+    return serialized.split(";").mapNotNull {
+        val parts = it.split(":")
+        if (parts.size == 2) {
+            val id = parts[0].toIntOrNull()
+            if (id != null) id to parts[1] else null
+        } else {
+            null
+        }
+    }.toMap()
+}
+
+fun serializeAttendanceStatus(map: Map<Int, String>): String {
+    return map.entries.joinToString(";") { "${it.key}:${it.value}" }
+}
+
+@Composable
+fun AttendanceBadge(label: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(color.copy(alpha = 0.12f))
+            .border(1.dp, color.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+            color = color
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InvitationsScreen(
@@ -43,6 +78,7 @@ fun InvitationsScreen(
     val userRole by viewModel.userRole.collectAsState()
     var showAddDialog by remember { mutableStateOf(isAddingInitial) }
     var selectedMeetingForDetail by remember { mutableStateOf<Meeting?>(null) }
+    var showRsvpDialog by remember { mutableStateOf(false) }
     
     // AI Dialog State
     var showAiResultDialog by remember { mutableStateOf(false) }
@@ -442,6 +478,73 @@ fun InvitationsScreen(
                                     }
                                 }
 
+                                // Attendance/RSVP management details
+                                val attendanceMap = remember(meeting.attendanceStatus) {
+                                    parseAttendanceStatus(meeting.attendanceStatus)
+                                }
+                                
+                                Spacer(modifier = Modifier.height(10.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                                Spacer(modifier = Modifier.height(10.dp))
+                                
+                                Text(
+                                    text = "Kehadiran Anggota Dewan (RSVP):",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                )
+                                
+                                // Fetch eligible recipients to count stats
+                                val eligibleRecipients = remember(meeting.recipientGroup, recipients) {
+                                    if (meeting.recipientGroup == "Seluruh Anggota DPRD") {
+                                        recipients.filter { it.role.contains("Anggota") || it.role.contains("Ketua") || it.role.contains("Pimpinan") }
+                                    } else if (meeting.recipientGroup.contains("Komisi I")) {
+                                        recipients.filter { it.role.contains("Komisi I") }
+                                    } else if (meeting.recipientGroup.contains("Komisi II")) {
+                                        recipients.filter { it.role.contains("Komisi II") }
+                                    } else if (meeting.recipientGroup.contains("Komisi III")) {
+                                        recipients.filter { it.role.contains("Komisi III") }
+                                    } else if (meeting.recipientGroup.contains("Pimpinan")) {
+                                        recipients.filter { it.role.contains("Ketua") || it.role.contains("Wakil") || it.role.contains("Pimpinan") }
+                                    } else if (meeting.recipientGroup.contains("Fraksi")) {
+                                        recipients.filter { it.role.contains("Fraksi") }
+                                    } else {
+                                        recipients
+                                    }
+                                }
+                                val finalRecipients = if (eligibleRecipients.isEmpty()) recipients else eligibleRecipients
+                                
+                                val totalInvitees = finalRecipients.size
+                                val hadirCount = finalRecipients.count { attendanceMap[it.id] == "Hadir" }
+                                val izinCount = finalRecipients.count { attendanceMap[it.id] == "Izin" }
+                                val sakitCount = finalRecipients.count { attendanceMap[it.id] == "Sakit" }
+                                val absenCount = finalRecipients.count { attendanceMap[it.id] == "Absen" }
+                                
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    AttendanceBadge(label = "Hadir: $hadirCount", color = Color(0xFF2E7D32))
+                                    AttendanceBadge(label = "Izin: $izinCount", color = Color(0xFFEF6C00))
+                                    AttendanceBadge(label = "Sakit: $sakitCount", color = Color(0xFF1565C0))
+                                    AttendanceBadge(label = "Absen: $absenCount", color = Color(0xFFC62828))
+                                }
+                                
+                                Spacer(modifier = Modifier.height(4.dp))
+                                
+                                Button(
+                                    onClick = {
+                                        showRsvpDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF475569)),
+                                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Input Kehadiran (RSVP)", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                                }
+
                                 // AI output preview directly in details
                                 if (meeting.aiSummary.isNotEmpty()) {
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -609,6 +712,184 @@ fun InvitationsScreen(
                             ) {
                                 Text("Selesai", color = Color.White)
                             }
+                        }
+                    }
+                )
+            }
+
+            // RSVP / ATTENDANCE STATUS DIALOG
+            if (showRsvpDialog && selectedMeetingForDetail != null) {
+                val meeting = selectedMeetingForDetail!!
+                
+                // Keep a local copy of attendance status being modified
+                var localAttendanceMap by remember {
+                    mutableStateOf(parseAttendanceStatus(meeting.attendanceStatus))
+                }
+                
+                // Get general/matching recipients list
+                val eligibleRecipients = remember(meeting.recipientGroup, recipients) {
+                    if (meeting.recipientGroup == "Seluruh Anggota DPRD") {
+                        recipients.filter { it.role.contains("Anggota") || it.role.contains("Ketua") || it.role.contains("Pimpinan") }
+                    } else if (meeting.recipientGroup.contains("Komisi I")) {
+                        recipients.filter { it.role.contains("Komisi I") }
+                    } else if (meeting.recipientGroup.contains("Komisi II")) {
+                        recipients.filter { it.role.contains("Komisi II") }
+                    } else if (meeting.recipientGroup.contains("Komisi III")) {
+                        recipients.filter { it.role.contains("Komisi III") }
+                    } else if (meeting.recipientGroup.contains("Pimpinan")) {
+                        recipients.filter { it.role.contains("Ketua") || it.role.contains("Wakil") || it.role.contains("Pimpinan") }
+                    } else if (meeting.recipientGroup.contains("Fraksi")) {
+                        recipients.filter { it.role.contains("Fraksi") }
+                    } else {
+                        recipients
+                    }
+                }
+                val finalRecipients = if (eligibleRecipients.isEmpty()) recipients else eligibleRecipients
+
+                AlertDialog(
+                    onDismissRequest = { showRsvpDialog = false },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.People, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "Manajemen Kehadiran",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 420.dp)
+                        ) {
+                            Text(
+                                text = meeting.title,
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.secondary,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = "Grup Sasaran: ${meeting.recipientGroup}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            
+                            if (finalRecipients.isEmpty()) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(Icons.Default.AccountBox, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), modifier = Modifier.size(48.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Belum ada data Kontak Penerima", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(finalRecipients) { recipient ->
+                                        val currentStatus = localAttendanceMap[recipient.id] ?: "Belum"
+                                        
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(10.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = recipient.name,
+                                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                                        )
+                                                        Text(
+                                                            text = "${recipient.role} • ${recipient.partyOrFaction}",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                        )
+                                                    }
+                                                }
+                                                
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                
+                                                // RSVP option Chips row
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    val options = listOf("Hadir", "Izin", "Sakit", "Absen")
+                                                    options.forEach { opt ->
+                                                        val isSelected = currentStatus == opt
+                                                        val color = when (opt) {
+                                                            "Hadir" -> Color(0xFF2E7D32)
+                                                            "Izin" -> Color(0xFFEF6C00)
+                                                            "Sakit" -> Color(0xFF1565C0)
+                                                            else -> Color(0xFFC62828)
+                                                        }
+                                                        
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .clip(RoundedCornerShape(6.dp))
+                                                                .background(if (isSelected) color else Color.Transparent)
+                                                                .border(1.dp, if (isSelected) color else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                                                .clickable {
+                                                                    val newMap = localAttendanceMap.toMutableMap()
+                                                                    if (isSelected) {
+                                                                        newMap.remove(recipient.id)
+                                                                    } else {
+                                                                        newMap[recipient.id] = opt
+                                                                    }
+                                                                    localAttendanceMap = newMap
+                                                                }
+                                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = opt,
+                                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val serialized = serializeAttendanceStatus(localAttendanceMap)
+                                val updatedM = meeting.copy(attendanceStatus = serialized)
+                                viewModel.updateMeeting(updatedM)
+                                // Also update our selected detail state so that statistics are immediately updated in real-time in the detail screen
+                                selectedMeetingForDetail = updatedM
+                                showRsvpDialog = false
+                                ToastUtils.show(context, "Status kehadiran berhasil disimpan & disinkronkan.")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Simpan", color = Color.White)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showRsvpDialog = false }) {
+                            Text("Batal")
                         }
                     }
                 )

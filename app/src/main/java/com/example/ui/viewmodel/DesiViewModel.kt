@@ -15,6 +15,14 @@ import com.example.data.FirebaseAuthManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+data class NotificationAlert(
+    val id: String,
+    val title: String,
+    val body: String,
+    val timestamp: Long,
+    val type: String // "INFO", "SCHEDULE_CHANGE", "NEW_MEETING", "ALERT_24H"
+)
+
 class DesiViewModel(
     application: Application,
     private val repository: AppRepository
@@ -27,6 +35,39 @@ class DesiViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    // StateFlow for meetings scheduled in the next 24 hours
+    private val _meetingsInNext24Hours = MutableStateFlow<List<Meeting>>(emptyList())
+    val meetingsInNext24Hours: StateFlow<List<Meeting>> = _meetingsInNext24Hours.asStateFlow()
+
+    private val notifiedMeetingIds = mutableSetOf<Int>()
+
+    // Real-Time Notification Center list
+    private val _notificationsList = MutableStateFlow<List<NotificationAlert>>(
+        listOf(
+            NotificationAlert(
+                id = "init_0",
+                title = "Sistem Notifikasi Aktif",
+                body = "Menyimak usulan agenda & pembaruan notulen DPRD Prabumulih secara real-time.",
+                timestamp = System.currentTimeMillis(),
+                type = "INFO"
+            )
+        )
+    )
+    val notificationsList: StateFlow<List<NotificationAlert>> = _notificationsList.asStateFlow()
+
+    fun addNotificationAlert(title: String, body: String, type: String = "INFO") {
+        val newNotification = NotificationAlert(
+            id = "notif_" + System.nanoTime(),
+            title = title,
+            body = body,
+            timestamp = System.currentTimeMillis(),
+            type = type
+        )
+        val currentList = _notificationsList.value.toMutableList()
+        currentList.add(0, newNotification)
+        _notificationsList.value = currentList.take(30) // Limit history to last 30 elements
+    }
 
     // Recipients Stream
     val recipientsState: StateFlow<List<Recipient>> = repository.allRecipients
@@ -180,6 +221,13 @@ class DesiViewModel(
     }
 
     init {
+        // Observe meetings and run upcoming alerts automatically
+        viewModelScope.launch {
+            meetingsState.collect { list ->
+                checkUpcomingMeetingsForAlerts(list)
+            }
+        }
+
         // Start Firestore Real-Time Synchronizer in the background
         FirestoreSyncManager.startRealTimeListeners(
             context = getApplication(),
@@ -187,6 +235,9 @@ class DesiViewModel(
             repository = repository,
             onLog = { logMsg ->
                 addSyncLog(logMsg)
+            },
+            onNotificationTriggered = { title, body, type ->
+                addNotificationAlert(title, body, type)
             }
         )
 
@@ -224,6 +275,79 @@ class DesiViewModel(
 
     fun clearAiResult() {
         _aiResult.value = ""
+    }
+
+    fun checkUpcomingMeetingsForAlerts(meetings: List<Meeting>) {
+        val now = System.currentTimeMillis()
+        val twentyFourHoursLimit = now + (24 * 60 * 60 * 1000L)
+        
+        val upcomingList = meetings.filter { meeting ->
+            if (meeting.status == "SELESAI") return@filter false
+            
+            val meetingDate = getMeetingDateTime(meeting.date, meeting.time)
+            if (meetingDate != null) {
+                val meetingTimeMs = meetingDate.time
+                meetingTimeMs in now..twentyFourHoursLimit
+            } else {
+                false
+            }
+        }
+        
+        _meetingsInNext24Hours.value = upcomingList
+        
+        // Trigger system notifications for alerts
+        upcomingList.forEach { meeting ->
+            if (!notifiedMeetingIds.contains(meeting.id)) {
+                notifiedMeetingIds.add(meeting.id)
+                viewModelScope.launch {
+                    try {
+                        com.example.ui.NotificationHelper.showNotification(
+                            getApplication(),
+                            "Pemberitahuan Rapat Penting!",
+                            "Rapat '${meeting.title}' dijadwalkan dalam 24 jam ke depan (${meeting.date} • ${meeting.time})"
+                        )
+                        addSyncLog("Notifikasi: Berhasl memicu pengingat 24 Jam untuk '${meeting.title}'.")
+                        addNotificationAlert(
+                            title = "Pemberitahuan Rapat Penting!",
+                            body = "Rapat '${meeting.title}' dijadwalkan dalam 24 jam ke depan (${meeting.date} • ${meeting.time})",
+                            type = "ALERT_24H"
+                        )
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun getMeetingDateTime(dateStr: String, timeStr: String): java.util.Date? {
+        val parsedDate = com.example.ui.screens.AgendaDateUtils.parseDate(dateStr) ?: return null
+        val calendar = java.util.Calendar.getInstance().apply {
+            time = parsedDate
+        }
+        try {
+            val regex = "(\\d{2}):(\\d{2})".toRegex()
+            val matchResult = regex.find(timeStr)
+            if (matchResult != null) {
+                val hour = matchResult.groupValues[1].toInt()
+                val minute = matchResult.groupValues[2].toInt()
+                calendar.set(java.util.Calendar.HOUR_OF_DAY, hour)
+                calendar.set(java.util.Calendar.MINUTE, minute)
+                calendar.set(java.util.Calendar.SECOND, 0)
+                calendar.set(java.util.Calendar.MILLISECOND, 0)
+            } else {
+                calendar.set(java.util.Calendar.HOUR_OF_DAY, 9)
+                calendar.set(java.util.Calendar.MINUTE, 0)
+                calendar.set(java.util.Calendar.SECOND, 0)
+                calendar.set(java.util.Calendar.MILLISECOND, 0)
+            }
+        } catch (e: Exception) {
+            calendar.set(java.util.Calendar.HOUR_OF_DAY, 9)
+            calendar.set(java.util.Calendar.MINUTE, 0)
+            calendar.set(java.util.Calendar.SECOND, 0)
+            calendar.set(java.util.Calendar.MILLISECOND, 0)
+        }
+        return calendar.time
     }
 
     // Meeting Operations
@@ -371,12 +495,13 @@ class DesiViewModel(
         date: String,
         attendees: String,
         rawNotes: String,
+        style: String = "Formal",
         onComplete: (String) -> Unit = {}
     ) {
         viewModelScope.launch {
             _isGeneratingAi.value = true
             val summary = GeminiService.generateMinutesSummary(
-                title, date, attendees, rawNotes
+                title, date, attendees, rawNotes, style
             )
             _aiResult.value = summary
             _isGeneratingAi.value = false

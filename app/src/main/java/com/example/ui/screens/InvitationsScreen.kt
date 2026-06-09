@@ -1,0 +1,811 @@
+package com.example.ui.screens
+
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
+import com.example.ui.ToastUtils
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.Meeting
+import com.example.data.Recipient
+import com.example.ui.theme.GoldAccent
+import com.example.ui.viewmodel.DesiViewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun InvitationsScreen(
+    viewModel: DesiViewModel,
+    meetings: List<Meeting>,
+    recipients: List<Recipient>,
+    isAddingInitial: Boolean = false,
+    onResetAddFlag: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val userRole by viewModel.userRole.collectAsState()
+    var showAddDialog by remember { mutableStateOf(isAddingInitial) }
+    var selectedMeetingForDetail by remember { mutableStateOf<Meeting?>(null) }
+    
+    // AI Dialog State
+    var showAiResultDialog by remember { mutableStateOf(false) }
+    var aiDraftText by remember { mutableStateOf("") }
+    val isGeneratingState by viewModel.isGeneratingAi.collectAsState()
+
+    // Form inputs
+    var title by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var time by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var agenda by remember { mutableStateOf("") }
+    var recipientGroup by remember { mutableStateOf("Seluruh Anggota DPRD") }
+    
+    val recipientOptions = listOf(
+        "Seluruh Anggota DPRD",
+        "Komisi I (Pemerintahan)",
+        "Komisi II (Keuangan)",
+        "Komisi III (Kesejahteraan)",
+        "Fraksi-Fraksi DPRD",
+        "Pimpinan DPRD Prabumulih",
+        "Pemerintah Kota Prabumulih",
+        "Custom / Lainnya"
+    )
+
+    // Trigger the dialog if opened from dashboard
+    LaunchedEffect(isAddingInitial) {
+        if (isAddingInitial) {
+            showAddDialog = true
+            onResetAddFlag()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Undangan Rapat DPRD", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary),
+                actions = {
+                    if (userRole == "SEKWAN") {
+                        IconButton(onClick = { showAddDialog = true }) {
+                            Icon(Icons.Default.Add, contentDescription = "Buat Undangan Baru", tint = Color.White)
+                        }
+                    } else {
+                        // Small real-time status indicating synchronization is live
+                        Row(
+                            modifier = Modifier
+                                .padding(end = 12.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Color(0xFF4CAF50))
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Ter-Sync", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp), color = Color.White)
+                        }
+                    }
+                }
+            )
+        },
+        floatingActionButton = {
+            if (userRole == "SEKWAN") {
+                FloatingActionButton(
+                    onClick = { showAddDialog = true },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add")
+                }
+            }
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            if (meetings.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Email,
+                        contentDescription = "Empty",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                        modifier = Modifier.size(72.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Belum ada undangan rapat",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Kelola dan kirimkan draf undangan DPRD Kota Prabumulih di sini.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        textAlign = TextAlign.Center
+                    )
+                    if (userRole == "SEKWAN") {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(
+                            onClick = { showAddDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Buat Undangan Pertama", color = Color.White)
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(meetings) { meeting ->
+                        InvitationItemCard(
+                            meeting = meeting,
+                            onClick = { selectedMeetingForDetail = meeting },
+                            onShare = {
+                                shareText(
+                                    context,
+                                    "UNDANGAN RESMI DPRD KOTA PRABUMULIH\n\n" +
+                                    "Kepada Yth. $recipientGroup\n\n" +
+                                    "Perihal: ${meeting.title}\n" +
+                                    "Hari/Tanggal: ${meeting.date}\n" +
+                                    "Waktu: ${meeting.time}\n" +
+                                    "Tempat: ${meeting.location}\n" +
+                                    "Agenda: ${meeting.agenda}\n\n" +
+                                    "Demikian undangan ini disampaikan. Atas kehadiran dan kerja samanya diucapkan terima kasih.\n\n" +
+                                    "Dari: Sekretariat DPRD Kota Prabumulih"
+                                )
+                                if (meeting.status == "DRAFT") {
+                                    viewModel.updateMeeting(meeting.copy(status = "DIKIRIM"))
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // ADD DIALOG
+            if (showAddDialog) {
+                AlertDialog(
+                    onDismissRequest = { showAddDialog = false },
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Email, 
+                                contentDescription = null, 
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Undangan Rapat Baru", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        }
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 400.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = title,
+                                onValueChange = { title = it },
+                                label = { Text("Perihal / Acara Rapat") },
+                                leadingIcon = { Icon(Icons.Default.Class, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = date,
+                                onValueChange = { date = it },
+                                label = { Text("Contoh: Senin, 15 Juni 2026") },
+                                placeholder = { Text("Hari, Tanggal") },
+                                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = time,
+                                onValueChange = { time = it },
+                                label = { Text("Waktu (contoh: 09:00 WIB)") },
+                                leadingIcon = { Icon(Icons.Default.AccessTime, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = location,
+                                onValueChange = { location = it },
+                                label = { Text("Tempat Ruang Rapat") },
+                                leadingIcon = { Icon(Icons.Default.Place, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            
+                            // Recipient selector drop down simple
+                            var expanded by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = recipientGroup,
+                                    onValueChange = { recipientGroup = it },
+                                    label = { Text("Ditujukan Kepada") },
+                                    leadingIcon = { Icon(Icons.Default.People, contentDescription = null) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { expanded = !expanded }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                DropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false },
+                                    modifier = Modifier.fillMaxWidth(0.9f)
+                                ) {
+                                    recipientOptions.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option) },
+                                            onClick = {
+                                                recipientGroup = option
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = agenda,
+                                onValueChange = { agenda = it },
+                                label = { Text("Agenda Rapat") },
+                                leadingIcon = { Icon(Icons.Default.Subject, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // AI Assistant Button within create dialog
+                            Button(
+                                onClick = {
+                                    if (title.isBlank() || date.isBlank()) {
+                                        ToastUtils.show(context, "Perihal dan Tanggal harus terisi terlebih dahulu")
+                                    } else {
+                                        viewModel.generateInvitationDraft(
+                                            title, date, time, location, agenda, recipientGroup
+                                        ) { generated ->
+                                            aiDraftText = generated
+                                        }
+                                        showAiResultDialog = true
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                contentPadding = PaddingValues(horizontal = 12.dp)
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Draf AI", color = Color.White)
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (title.isNotBlank()) {
+                                        val newMeeting = Meeting(
+                                            title = title,
+                                            date = date,
+                                            time = time,
+                                            location = location,
+                                            agenda = agenda,
+                                            recipientGroup = recipientGroup,
+                                            status = "DRAFT"
+                                        )
+                                        viewModel.saveMeeting(newMeeting)
+                                        showAddDialog = false
+                                        // clear inputs
+                                        title = ""
+                                        date = ""
+                                        time = ""
+                                        location = ""
+                                        agenda = ""
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("Simpan", color = Color.White)
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showAddDialog = false }) {
+                            Text("Batal")
+                        }
+                    }
+                )
+            }
+
+            // DETAILS & EDIT DIALOG
+            if (selectedMeetingForDetail != null) {
+                val meeting = selectedMeetingForDetail!!
+                var editMode by remember { mutableStateOf(false) }
+                
+                var dTitle by remember { mutableStateOf(meeting.title) }
+                var dDate by remember { mutableStateOf(meeting.date) }
+                var dTime by remember { mutableStateOf(meeting.time) }
+                var dLocation by remember { mutableStateOf(meeting.location) }
+                var dAgenda by remember { mutableStateOf(meeting.agenda) }
+                var dGroup by remember { mutableStateOf(meeting.recipientGroup) }
+                var dStatus by remember { mutableStateOf(meeting.status) }
+
+                AlertDialog(
+                    onDismissRequest = { selectedMeetingForDetail = null },
+                    title = {
+                        Text(
+                            text = if (editMode) "Edit Detail Undangan" else "Detail Kegiatan Rapat",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 400.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (editMode) {
+                                OutlinedTextField(value = dTitle, onValueChange = { dTitle = it }, label = { Text("Perihal") }, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(value = dDate, onValueChange = { dDate = it }, label = { Text("Hari, Tanggal") }, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(value = dTime, onValueChange = { dTime = it }, label = { Text("Waktu") }, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(value = dLocation, onValueChange = { dLocation = it }, label = { Text("Tempat") }, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(value = dGroup, onValueChange = { dGroup = it }, label = { Text("Kepada Yth") }, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(value = dAgenda, onValueChange = { dAgenda = it }, label = { Text("Agenda") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                                
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text("Status:")
+                                    val statusOptions = listOf("DRAFT", "DIKIRIM", "SELESAI")
+                                    statusOptions.forEach { opt ->
+                                        ElevatedFilterChip(
+                                            selected = dStatus == opt,
+                                            onClick = { dStatus = opt },
+                                            label = { Text(opt) }
+                                        )
+                                    }
+                                }
+                            } else {
+                                InfoItem(label = "Perihal Rapat", value = meeting.title, icon = Icons.Default.Class)
+                                InfoItem(label = "Hari, Tanggal", value = meeting.date, icon = Icons.Default.DateRange)
+                                InfoItem(label = "Waktu pelaksanaan", value = meeting.time, icon = Icons.Default.AccessTime)
+                                InfoItem(label = "Lokasi Ruangan", value = meeting.location, icon = Icons.Default.Place)
+                                InfoItem(label = "Ditujukan Kepada", value = meeting.recipientGroup, icon = Icons.Default.People)
+                                InfoItem(label = "Agenda Pembahasan", value = meeting.agenda, icon = Icons.Default.Subject)
+                                
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                ) {
+                                    Text("Status Kegiatan: ", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                when(meeting.status) {
+                                                    "DIKIRIM" -> Color(0xFF2E7D32).copy(alpha = 0.12f)
+                                                    "SELESAI" -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                                    else -> Color(0xFFE65100).copy(alpha = 0.12f)
+                                                }
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = meeting.status,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = when(meeting.status) {
+                                                "DIKIRIM" -> Color(0xFF2E7D32)
+                                                "SELESAI" -> MaterialTheme.colorScheme.primary
+                                                else -> Color(0xFFE65100)
+                                            }
+                                        )
+                                    }
+                                }
+
+                                // AI output preview directly in details
+                                if (meeting.aiSummary.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Divider()
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Ringkasan Notulen (Format AI):", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.secondary)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.05f))
+                                            .border(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            text = meeting.aiSummary,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.heightIn(max = 120.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (editMode) {
+                                Button(
+                                    onClick = {
+                                        viewModel.updateMeeting(
+                                            meeting.copy(
+                                                title = dTitle,
+                                                date = dDate,
+                                                time = dTime,
+                                                location = dLocation,
+                                                agenda = dAgenda,
+                                                recipientGroup = dGroup,
+                                                status = dStatus
+                                            )
+                                        )
+                                        selectedMeetingForDetail = null
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Text("Simpan Perubahan", color = Color.White)
+                                }
+                             } else {
+                                if (userRole == "SEKWAN") {
+                                    IconButton(onClick = {
+                                        viewModel.deleteMeeting(meeting)
+                                        selectedMeetingForDetail = null
+                                    }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = Color.Red)
+                                    }
+                                }
+                                
+                                Button(
+                                    onClick = {
+                                        viewModel.generateInvitationDraft(
+                                            meeting.title, meeting.date, meeting.time, meeting.location, meeting.agenda, meeting.recipientGroup
+                                        ) { generated ->
+                                            aiDraftText = generated
+                                        }
+                                        showAiResultDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                ) {
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Lihat Draf AI", color = Color.White)
+                                }
+
+                                if (userRole == "SEKWAN") {
+                                    Button(
+                                        onClick = { editMode = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Text("Edit", color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { selectedMeetingForDetail = null }) {
+                            Text("Tutup")
+                        }
+                    }
+                )
+            }
+
+            // AI RESULT DRAFT DIALOG
+            if (showAiResultDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showAiResultDialog = false
+                        viewModel.clearAiResult()
+                    },
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = GoldAccent)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Draf Undangan Resmi AI", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        }
+                    },
+                    text = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(250.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                .padding(12.dp)
+                        ) {
+                            val liveResult by viewModel.aiResult.collectAsState()
+                            
+                            if (isGeneratingState) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Desi sedang merumuskan surat undangan resmi...", style = MaterialTheme.typography.bodySmall)
+                                }
+                            } else {
+                                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                    item {
+                                        Text(
+                                            text = liveResult.ifEmpty { aiDraftText.ifEmpty { "Gagal menghasilkan draf surat. Periksa API key Anda." } },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilledIconButton(
+                                onClick = {
+                                    val finalStr = viewModel.aiResult.value.ifEmpty { aiDraftText }
+                                    if (finalStr.isNotEmpty()) {
+                                        shareText(context, finalStr)
+                                    }
+                                },
+                                colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = "Bagikan", tint = Color.White)
+                            }
+
+                            Button(
+                                onClick = {
+                                    showAiResultDialog = false
+                                    viewModel.clearAiResult()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("Selesai", color = Color.White)
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun InvitationItemCard(
+    meeting: Meeting,
+    onClick: () -> Unit,
+    onShare: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = meeting.recipientGroup,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(
+                            when(meeting.status) {
+                                "DIKIRIM" -> Color(0xFF2E7D32).copy(alpha = 0.12f)
+                                "SELESAI" -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                else -> Color(0xFFE65100).copy(alpha = 0.12f)
+                            }
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = meeting.status,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = when(meeting.status) {
+                            "DIKIRIM" -> Color(0xFF2E7D32)
+                            "SELESAI" -> MaterialTheme.colorScheme.primary
+                            else -> Color(0xFFE65100)
+                        }
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Text(
+                text = meeting.title,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                IconTextRow(icon = Icons.Default.DateRange, label = "${meeting.date} • ${meeting.time}")
+                IconTextRow(icon = Icons.Default.Place, label = meeting.location)
+                if (meeting.agenda.isNotEmpty()) {
+                    IconTextRow(icon = Icons.Default.Subject, label = meeting.agenda)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onClick,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.RemoveRedEye, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Detail")
+                }
+
+                Button(
+                    onClick = onShare,
+                    modifier = Modifier.weight(1.2f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Kirim Undangan", color = Color.White)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun IconTextRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+fun InfoItem(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(24.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+            Text(
+                text = value.ifEmpty { "-" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+fun shareText(context: Context, text: String) {
+    val sendIntent: Intent = Intent().apply {
+        action = Intent.ACTION_SEND
+        putExtra(Intent.EXTRA_TEXT, text)
+        type = "text/plain"
+    }
+
+    val shareIntent = Intent.createChooser(sendIntent, "Kirim undangan melalui:")
+    context.startActivity(shareIntent)
+}

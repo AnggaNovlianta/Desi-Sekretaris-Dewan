@@ -1,0 +1,6 @@
+{
+  "name": "Desi",
+  "description": "Aplikasi asisten Sekretaris DPRD Kota Prabumulih untuk mengelola undangan rapat, notulen rapat, agenda kegiatan, dan sinkronisasi informasi dengan kecerdasan buatan Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

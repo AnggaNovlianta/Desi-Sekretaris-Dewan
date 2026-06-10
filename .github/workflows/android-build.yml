@@ -1,40 +1,47 @@
-name: Build Android APK (Manual)
+name: Build Android APK
 
-# Memicu pembuatan manual dan otomatis setiap kali melakukan push ke branch utama
 on:
-  workflow_dispatch: # Mengaktifkan tombol "Run workflow" manual di tab Actions GitHub
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. Checkout kode repositori Anda
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    # 2. Setup Java Development Kit (JDK 17)
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-        cache: 'gradle'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
 
-    # 3. Berikan izin eksekusi pada gradlew (Sekarang file ini pasti terbaca)
-    - name: Grant Execute Permission for Gradlew
-      run: chmod +x gradlew
+      - name: Setup Secrets / Env Variables
+        run: |
+          if [ -f .env.example ]; then
+            cp .env.example .env
+          else
+            touch .env
+          fi
 
-    # 4. Bangun file APK (Debug Build)
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
 
-    # 5. Simpan file APK sebagai Artifact yang dapat diunduh
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: android-app-debug-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
-        retention-days: 7
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk

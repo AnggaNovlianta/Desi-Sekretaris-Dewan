@@ -393,6 +393,70 @@ object PdfExporter {
             canvas.drawText("Prabumulih, " + meeting.date.substringAfter(", ").trim(), rightMargin - 15f, y, paintSignLine)
             y += 13f
             canvas.drawText("Sekretaris Dewan Perwakilan Rakyat Daerah,", rightMargin - 15f, y, paintSignTitle)
+            
+            // Draw digital verification seal stamp on the left if minutes are DISAHKAN
+            if (meeting.status == "DISAHKAN") {
+                val sealY = y - 5f
+                val sealX = leftMargin + 10f
+                
+                // Draw decorative light green rounded rect for stamp
+                val paintStampBg = Paint().apply {
+                    color = android.graphics.Color.rgb(235, 247, 237) // soft green
+                    style = Paint.Style.FILL
+                }
+                val paintStampBorder = Paint().apply {
+                    color = android.graphics.Color.rgb(46, 125, 50) // green
+                    strokeWidth = 1f
+                    style = Paint.Style.STROKE
+                    isAntiAlias = true
+                }
+                val paintStampText = Paint().apply {
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    textSize = 6.5f
+                    color = android.graphics.Color.rgb(46, 125, 50)
+                    isAntiAlias = true
+                }
+                val paintStampTextNormal = Paint().apply {
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                    textSize = 5.5f
+                    color = android.graphics.Color.rgb(46, 125, 50)
+                    isAntiAlias = true
+                }
+
+                // Draw Rounded Stamp Box
+                canvas.drawRoundRect(sealX, sealY, sealX + 220f, sealY + 58f, 3f, 3f, paintStampBg)
+                canvas.drawRoundRect(sealX, sealY, sealX + 220f, sealY + 58f, 3f, 3f, paintStampBorder)
+                
+                // Draw Stamp Labels
+                canvas.drawText("TERVERIFIKASI & DISAHKAN DIGITAL", sealX + 45f, sealY + 12f, paintStampText)
+                canvas.drawText("Sistem Informasi DESI DPRD Kota Prabumulih", sealX + 45f, sealY + 22f, paintStampTextNormal)
+                canvas.drawText("Penandatangan: SEKRETARIS DPRD", sealX + 45f, sealY + 31f, paintStampTextNormal)
+                canvas.drawText("Tanggal TTE: " + meeting.date.substringAfter(", ").trim(), sealX + 45f, sealY + 40f, paintStampTextNormal)
+                canvas.drawText("Status: DOKUMEN SAH & RESMI (ORIGINAL)", sealX + 45f, sealY + 49f, paintStampText)
+                
+                // Draw simulated QR Code inside the seal box
+                val qrLeft = sealX + 5f
+                val qrTop = sealY + 10f
+                val qrSize = 38f
+                
+                // outer qr box
+                canvas.drawRect(qrLeft, qrTop, qrLeft + qrSize, qrTop + qrSize, Paint().apply { color = android.graphics.Color.rgb(46, 125, 50); style = Paint.Style.STROKE; strokeWidth = 1f; isAntiAlias = true })
+                
+                // Draw 3 standard corner alignment blocks
+                canvas.drawRect(qrLeft + 2f, qrTop + 2f, qrLeft + 10f, qrTop + 10f, Paint().apply { color = android.graphics.Color.rgb(46, 125, 50) })
+                canvas.drawRect(qrLeft + qrSize - 10f, qrTop + 2f, qrLeft + qrSize - 2f, qrTop + 10f, Paint().apply { color = android.graphics.Color.rgb(46, 125, 50) })
+                canvas.drawRect(qrLeft + 2f, qrTop + qrSize - 10f, qrLeft + 10f, qrTop + qrSize - 2f, Paint().apply { color = android.graphics.Color.rgb(46, 125, 50) })
+                
+                // draw inner white/bg dots for alignment blocks
+                canvas.drawRect(qrLeft + 4f, qrTop + 4f, qrLeft + 8f, qrTop + 8f, Paint().apply { color = android.graphics.Color.rgb(235, 247, 237) })
+                canvas.drawRect(qrLeft + qrSize - 8f, qrTop + 4f, qrLeft + qrSize - 4f, qrTop + 8f, Paint().apply { color = android.graphics.Color.rgb(235, 247, 237) })
+                canvas.drawRect(qrLeft + 4f, qrTop + qrSize - 8f, qrLeft + 8f, qrTop + qrSize - 4f, Paint().apply { color = android.graphics.Color.rgb(235, 247, 237) })
+                
+                // draw center fake pattern
+                canvas.drawRect(qrLeft + 14f, qrTop + 14f, qrLeft + 20f, qrTop + 20f, Paint().apply { color = android.graphics.Color.rgb(46, 125, 50) })
+                canvas.drawRect(qrLeft + 22f, qrTop + 22f, qrLeft + qrSize - 4f, qrTop + qrSize - 4f, Paint().apply { color = android.graphics.Color.rgb(46, 125, 50) })
+            }
+            
             y += 42f
             canvas.drawText("(................................................................)", rightMargin - 15f, y, paintSignLine)
             y += 13f

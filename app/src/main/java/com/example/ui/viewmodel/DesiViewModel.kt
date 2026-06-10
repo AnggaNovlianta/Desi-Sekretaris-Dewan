@@ -464,6 +464,68 @@ class DesiViewModel(
         }
     }
 
+    fun syncDeviceContacts(
+        context: android.content.Context,
+        onSuccess: (Int) -> Unit,
+        onFailure: (String) -> Unit
+    ) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val contentResolver = context.contentResolver
+                val uri = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+                val projection = arrayOf(
+                    android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER
+                )
+                
+                val cursor = contentResolver.query(uri, projection, null, null, null)
+                var syncedCount = 0
+                
+                cursor?.use { c ->
+                    val nameIdx = c.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                    val numberIdx = c.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    
+                    if (nameIdx != -1 && numberIdx != -1) {
+                        val existingRecipients = repository.allRecipients.first()
+                        val existingPhones = existingRecipients.map { 
+                            it.phoneNumber.replace("\\s|-|\\+62|\\+0".toRegex(), "") 
+                        }.toSet()
+                        
+                        while (c.moveToNext()) {
+                            val rawName = c.getString(nameIdx) ?: ""
+                            val rawNumber = c.getString(numberIdx) ?: ""
+                            val sanitizedNumber = rawNumber.replace("\\s|-|\\+62|\\+0".toRegex(), "")
+                            
+                            if (rawName.isNotBlank() && rawNumber.isNotBlank() && !existingPhones.contains(sanitizedNumber)) {
+                                val recipient = Recipient(
+                                    name = rawName,
+                                    role = "Kontak HP Impor",
+                                    phoneNumber = rawNumber,
+                                    partyOrFaction = "Sinkronisasi HP"
+                                )
+                                repository.insertRecipient(recipient)
+                                FirestoreSyncManager.syncRecipientToCloud(recipient)
+                                syncedCount++
+                            }
+                        }
+                    }
+                }
+                
+                launch(kotlinx.coroutines.Dispatchers.Main) {
+                    onSuccess(syncedCount)
+                    if (syncedCount > 0) {
+                        addSyncLog("Sinkron: Berhasil menyinkronkan $syncedCount kontak dari handphone.")
+                        addSyncLog("Sinkronisasi otomatis berhasil terunggah ke database Komisi DESI.")
+                    }
+                }
+            } catch (e: Exception) {
+                launch(kotlinx.coroutines.Dispatchers.Main) {
+                    onFailure(e.localizedMessage ?: "Gagal mendapatkan izin membaca kontak.")
+                }
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         FirestoreSyncManager.stopListeners()

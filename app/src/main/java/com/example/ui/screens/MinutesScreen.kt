@@ -7,6 +7,8 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,6 +50,7 @@ fun MinutesScreen(
     var newAttendees by remember { mutableStateOf("") }
     var newNotesContent by remember { mutableStateOf("") }
     var newActiveTab by remember { mutableStateOf(0) } // 0 = Tulis Catatan, 1 = Ringkasan AI
+    var userFontSizeValue by remember { mutableStateOf(15) } // Shared font size state for councils (12, 15, 18, 22)
 
     val commonLocations = listOf(
         "Ruang Rapat Paripurna",
@@ -218,13 +221,50 @@ fun MinutesScreen(
                     },
                     title = {
                         Column {
-                            Text(
-                                text = meeting.title,
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = meeting.title,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (meeting.status == "DISAHKAN") {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0xFFE8F5E9))
+                                            .border(1.dp, Color(0xFF2E7D32), RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Verified,
+                                                contentDescription = "Sah TTE",
+                                                tint = Color(0xFF2E7D32),
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = "SAH (TTE)",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    fontSize = 9.sp
+                                                ),
+                                                color = Color(0xFF2E7D32)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             Text(
                                 text = "Tanggal: ${meeting.date}",
                                 style = MaterialTheme.typography.bodySmall,
@@ -255,6 +295,58 @@ fun MinutesScreen(
                                     onClick = { activeTab = 1 },
                                     text = { Text("Asisten AI Desi", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                                 )
+                            }
+
+                            // Teks Readability Adjuster Bar (Menambah Kenyamanan Membaca & Mengetik)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
+                                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.TextFields,
+                                        contentDescription = "Ukuran Huruf",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Ukuran Tulisan:",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    val sizePresets = listOf(13 to "A-", 16 to "A", 19 to "A+", 23 to "A++")
+                                    sizePresets.forEach { (szValue, labelShort) ->
+                                        val isSelected = userFontSizeValue == szValue
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                                .clickable { userFontSizeValue = szValue }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = labelShort,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(4.dp))
@@ -432,12 +524,65 @@ fun MinutesScreen(
                                         }
                                     }
 
+                                    if (userRole == "SEKWAN") {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = "Draf Rapat Cepat (Klik untuk Sisipkan):",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.secondary)
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text("Mendukung Voice Typing 🎙️", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.secondary)
+                                                }
+                                            }
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                val quickPresets = listOf(
+                                                    "Pembukaan" to "• Rapat dibuka oleh Pimpinan pukul [Waktu]. Kuorum terpenuhi.\n",
+                                                    "Pokok Rencana" to "• Merencanakan program kerja strategis legislasi dan pengawasan anggaran daerah.\n",
+                                                    "Instruksi Dewan" to "• Dewan menginstruksikan percepatan aksi infrastruktur jalan dan fasilitas publik.\n",
+                                                    "Persetujuan" to "• Forum sepakat mengesahkan keputusan pleno ini secara mufakat.\n"
+                                                )
+                                                quickPresets.forEach { (label, insertionCode) ->
+                                                    SuggestionChip(
+                                                        onClick = {
+                                                            notesContent = if (notesContent.endsWith("\n") || notesContent.isEmpty()) {
+                                                                notesContent + insertionCode
+                                                            } else {
+                                                                notesContent + "\n" + insertionCode
+                                                            }
+                                                        },
+                                                        label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     OutlinedTextField(
                                         value = notesContent,
                                         onValueChange = { if (userRole == "SEKWAN") notesContent = it },
                                         readOnly = userRole != "SEKWAN",
                                         label = { Text("Hasil Pembahasan Rapat (Jalannya Sidang)") },
                                         placeholder = { Text("Masukkan draf pembahasan secara berurutan atau poin kasar...") },
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                            fontSize = userFontSizeValue.sp,
+                                            lineHeight = (userFontSizeValue * 1.35f).sp
+                                        ),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .weight(1f),
@@ -547,8 +692,10 @@ fun MinutesScreen(
                                                     item {
                                                         Text(
                                                             text = displaySummary,
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                                fontSize = userFontSizeValue.sp,
+                                                                lineHeight = (userFontSizeValue * 1.4f).sp
+                                                            )
                                                         )
                                                     }
                                                 }
@@ -616,15 +763,46 @@ fun MinutesScreen(
                             }
 
                             if (userRole == "SEKWAN") {
+                                if (meeting.status != "DISAHKAN") {
+                                    Button(
+                                        onClick = {
+                                            val finalSummary = liveAiResult.ifEmpty { meeting.aiSummary }
+                                            viewModel.updateMeeting(
+                                                meeting.copy(
+                                                    minutesContent = notesContent,
+                                                    attendeesList = attendees,
+                                                    aiSummary = finalSummary,
+                                                    status = "DISAHKAN"
+                                                )
+                                            )
+                                            viewModel.addNotificationAlert(
+                                                title = "Notulen Rapat Resmi Disahkan!",
+                                                body = "Sekwan telah mengesahkan risalah '${meeting.title}' secara digital (TTE).",
+                                                type = "SCHEDULE_CHANGE"
+                                            )
+                                            viewModel.addSyncLog("TTE Sekwan: Mengesahkan risalah rapat '${meeting.title}' dengan TTE resmi.")
+                                            selectedMeetingForNotes = null
+                                            viewModel.clearAiResult()
+                                            ToastUtils.show(context, "Dokumen resmi disahkan secara hukum dengan TTE Sekwan!")
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                        modifier = Modifier.testTag("button_sahkan_minutes")
+                                    ) {
+                                        Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Sahkan TTE", color = Color.White)
+                                    }
+                                }
                                 Button(
                                     onClick = {
                                         val finalSummary = liveAiResult.ifEmpty { meeting.aiSummary }
+                                        val nextStatus = if (meeting.status == "DISAHKAN") "DISAHKAN" else "SELESAI"
                                         viewModel.updateMeeting(
                                             meeting.copy(
                                                 minutesContent = notesContent,
                                                 attendeesList = attendees,
                                                 aiSummary = finalSummary,
-                                                status = "SELESAI"
+                                                status = nextStatus
                                             )
                                         )
                                         selectedMeetingForNotes = null
@@ -711,6 +889,58 @@ fun MinutesScreen(
                                     onClick = { newActiveTab = 1 },
                                     text = { Text("Asisten AI Desi", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                                 )
+                            }
+
+                            // Teks Readability Adjuster Bar (Menambah Kenyamanan Membaca & Mengetik)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
+                                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.TextFields,
+                                        contentDescription = "Ukuran Huruf",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Ukuran Tulisan:",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    val sizePresets = listOf(13 to "A-", 16 to "A", 19 to "A+", 23 to "A++")
+                                    sizePresets.forEach { (szValue, labelShort) ->
+                                        val isSelected = userFontSizeValue == szValue
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                                .clickable { userFontSizeValue = szValue }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = labelShort,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(4.dp))
@@ -952,11 +1182,62 @@ fun MinutesScreen(
                                         }
                                     }
 
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "Draf Rapat Cepat (Klik untuk Sisipkan):",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.secondary)
+                                                Spacer(modifier = Modifier.width(3.dp))
+                                                Text("Mendukung Voice Typing 🎙️", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.secondary)
+                                            }
+                                        }
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            val quickPresets = listOf(
+                                                "Pembukaan" to "• Rapat dibuka oleh Pimpinan pukul [Waktu]. Kuorum terpenuhi.\n",
+                                                "Pokok Rencana" to "• Merencanakan program kerja strategis legislasi dan pengawasan anggaran daerah.\n",
+                                                "Instruksi Dewan" to "• Dewan menginstruksikan percepatan aksi infrastruktur jalan dan fasilitas publik.\n",
+                                                "Persetujuan" to "• Forum sepakat mengesahkan keputusan pleno ini secara mufakat.\n"
+                                            )
+                                            quickPresets.forEach { (label, insertionCode) ->
+                                                SuggestionChip(
+                                                    onClick = {
+                                                        localNotesContent = if (localNotesContent.endsWith("\n") || localNotesContent.isEmpty()) {
+                                                            localNotesContent + insertionCode
+                                                        } else {
+                                                            localNotesContent + "\n" + insertionCode
+                                                        }
+                                                    },
+                                                    label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                                                )
+                                            }
+                                        }
+                                    }
+
                                     OutlinedTextField(
                                         value = localNotesContent,
                                         onValueChange = { localNotesContent = it },
                                         label = { Text("Jalannya Sidang / Hal-Hal yang Dibahas") },
                                         placeholder = { Text("Poin-poin diskusi mentah, saran, keberatan dewan...") },
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                            fontSize = userFontSizeValue.sp,
+                                            lineHeight = (userFontSizeValue * 1.35f).sp
+                                        ),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .weight(1f)
@@ -1046,8 +1327,10 @@ fun MinutesScreen(
                                                     item {
                                                         Text(
                                                             text = liveAiResult,
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                                fontSize = userFontSizeValue.sp,
+                                                                lineHeight = (userFontSizeValue * 1.4f).sp
+                                                            )
                                                         )
                                                     }
                                                 }
@@ -1206,15 +1489,16 @@ fun MinutesItemCard(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
                         .background(
-                            if (meeting.status == "SELESAI") Color(0xFF2E7D32).copy(alpha = 0.12f)
+                            if (meeting.status == "DISAHKAN") Color(0xFF2E7D32).copy(alpha = 0.12f)
+                            else if (meeting.status == "SELESAI") MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                             else MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)
                         )
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = if (meeting.status == "SELESAI") "SUDAH DIRANGKUM" else "BUTUH NOTULEN",
+                        text = if (meeting.status == "DISAHKAN") "RESMI DISAHKAN (TTE)" else if (meeting.status == "SELESAI") "SUDAH DIRANGKUM" else "BUTUH NOTULEN",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = if (meeting.status == "SELESAI") Color(0xFF2E7D32) else MaterialTheme.colorScheme.secondary
+                        color = if (meeting.status == "DISAHKAN") Color(0xFF2E7D32) else if (meeting.status == "SELESAI") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
                     )
                 }
             }
@@ -1272,18 +1556,24 @@ fun MinutesItemCard(
                 onClick = onClick,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (meeting.status == "SELESAI") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                    containerColor = if (meeting.status == "DISAHKAN") Color(0xFF2E7D32)
+                                     else if (meeting.status == "SELESAI") MaterialTheme.colorScheme.secondary 
+                                     else MaterialTheme.colorScheme.primary
                 )
             ) {
                 Icon(
-                    imageVector = if (meeting.status == "SELESAI") Icons.Default.AutoAwesome else Icons.Default.Edit,
+                    imageVector = if (meeting.status == "DISAHKAN") Icons.Default.Verified
+                                  else if (meeting.status == "SELESAI") Icons.Default.AutoAwesome 
+                                  else Icons.Default.Edit,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = Color.White
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (meeting.status == "SELESAI") "Buka Notulen & Ringkasan AI" else "Tulis & Rangkum Notulen",
+                    text = if (meeting.status == "DISAHKAN") "Buka Notulen (Resmi Disahkan)" 
+                           else if (meeting.status == "SELESAI") "Buka Notulen & Ringkasan AI" 
+                           else "Tulis & Rangkum Notulen",
                     color = Color.White
                 )
             }

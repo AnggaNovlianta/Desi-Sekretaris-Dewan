@@ -8,6 +8,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -253,67 +256,123 @@ fun InvitationsScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 400.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                .heightIn(max = 420.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
+                            Text(
+                                text = "Isi detail undangan rapat di bawah ini secara lengkap. Layar ini mendukung gulir (scroll) saat mengetik.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
                             OutlinedTextField(
                                 value = title,
                                 onValueChange = { title = it },
-                                label = { Text("Perihal / Acara Rapat") },
-                                leadingIcon = { Icon(Icons.Default.Class, contentDescription = null) },
-                                modifier = Modifier.fillMaxWidth()
+                                label = { Text("Perihal / Nama Rapat", fontWeight = FontWeight.Bold) },
+                                leadingIcon = { Icon(Icons.Default.Class, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
+
                             OutlinedTextField(
                                 value = date,
                                 onValueChange = { date = it },
-                                label = { Text("Contoh: Senin, 15 Juni 2026") },
-                                placeholder = { Text("Hari, Tanggal") },
-                                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) },
-                                modifier = Modifier.fillMaxWidth()
+                                label = { Text("Hari, Tanggal pelaksanaan", fontWeight = FontWeight.Bold) },
+                                placeholder = { Text("Contoh: Senin, 15 Juni 2026") },
+                                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
+
                             OutlinedTextField(
                                 value = time,
                                 onValueChange = { time = it },
-                                label = { Text("Waktu (contoh: 09:00 WIB)") },
-                                leadingIcon = { Icon(Icons.Default.AccessTime, contentDescription = null) },
-                                modifier = Modifier.fillMaxWidth()
+                                label = { Text("Waktu Pelaksanaan", fontWeight = FontWeight.Bold) },
+                                placeholder = { Text("Contoh: 09:00 WIB s/d Selesai") },
+                                leadingIcon = { Icon(Icons.Default.AccessTime, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
+
                             OutlinedTextField(
                                 value = location,
                                 onValueChange = { location = it },
-                                label = { Text("Tempat Ruang Rapat") },
-                                leadingIcon = { Icon(Icons.Default.Place, contentDescription = null) },
-                                modifier = Modifier.fillMaxWidth()
+                                label = { Text("Tempat / Lokasi Ruangan", fontWeight = FontWeight.Bold) },
+                                placeholder = { Text("Contoh: Ruang Rapat Paripurna") },
+                                leadingIcon = { Icon(Icons.Default.Place, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
                             
-                            // Recipient selector drop down simple
-                            var expanded by remember { mutableStateOf(false) }
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                OutlinedTextField(
-                                    value = recipientGroup,
-                                    onValueChange = { recipientGroup = it },
-                                    label = { Text("Ditujukan Kepada") },
-                                    leadingIcon = { Icon(Icons.Default.People, contentDescription = null) },
-                                    trailingIcon = {
-                                        IconButton(onClick = { expanded = !expanded }) {
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
+                            // Recipient selector drop down & horizontal scroll shortcut chips
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Ditujukan Kepada (Pilih Cepat & Mudah Dibaca):",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
                                 )
-                                DropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false },
-                                    modifier = Modifier.fillMaxWidth(0.9f)
+                                
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState())
+                                        .padding(vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     recipientOptions.forEach { option ->
-                                        DropdownMenuItem(
-                                            text = { Text(option) },
-                                            onClick = {
-                                                recipientGroup = option
-                                                expanded = false
+                                        val isSelected = recipientGroup == option
+                                        FilterChip(
+                                            selected = isSelected,
+                                            onClick = { recipientGroup = option },
+                                            label = {
+                                                Text(
+                                                    text = option,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
                                             }
                                         )
+                                    }
+                                }
+                                
+                                var expanded by remember { mutableStateOf(false) }
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = recipientGroup,
+                                        onValueChange = { recipientGroup = it },
+                                        label = { Text("Nama/Grup Kontak Penerima", fontWeight = FontWeight.Bold) },
+                                        leadingIcon = { Icon(Icons.Default.People, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { expanded = !expanded }) {
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                            }
+                                        },
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    DropdownMenu(
+                                        expanded = expanded,
+                                        onDismissRequest = { expanded = false },
+                                        modifier = Modifier.fillMaxWidth(0.9f)
+                                    ) {
+                                        recipientOptions.forEach { option ->
+                                            DropdownMenuItem(
+                                                text = { Text(option) },
+                                                onClick = {
+                                                    recipientGroup = option
+                                                    expanded = false
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -321,8 +380,10 @@ fun InvitationsScreen(
                             OutlinedTextField(
                                 value = agenda,
                                 onValueChange = { agenda = it },
-                                label = { Text("Agenda Rapat") },
-                                leadingIcon = { Icon(Icons.Default.Subject, contentDescription = null) },
+                                label = { Text("Agenda Rapat", fontWeight = FontWeight.Bold) },
+                                placeholder = { Text("Sebutkan rincian agenda pembahasan rapat...") },
+                                leadingIcon = { Icon(Icons.Default.Subject, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                textStyle = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.fillMaxWidth(),
                                 minLines = 2
                             )
@@ -416,22 +477,121 @@ fun InvitationsScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 400.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                .heightIn(max = 420.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             if (editMode) {
-                                OutlinedTextField(value = dTitle, onValueChange = { dTitle = it }, label = { Text("Perihal") }, modifier = Modifier.fillMaxWidth())
-                                OutlinedTextField(value = dDate, onValueChange = { dDate = it }, label = { Text("Hari, Tanggal") }, modifier = Modifier.fillMaxWidth())
-                                OutlinedTextField(value = dTime, onValueChange = { dTime = it }, label = { Text("Waktu") }, modifier = Modifier.fillMaxWidth())
-                                OutlinedTextField(value = dLocation, onValueChange = { dLocation = it }, label = { Text("Tempat") }, modifier = Modifier.fillMaxWidth())
-                                OutlinedTextField(value = dGroup, onValueChange = { dGroup = it }, label = { Text("Kepada Yth") }, modifier = Modifier.fillMaxWidth())
-                                OutlinedTextField(value = dAgenda, onValueChange = { dAgenda = it }, label = { Text("Agenda") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                                OutlinedTextField(
+                                    value = dTitle,
+                                    onValueChange = { dTitle = it },
+                                    label = { Text("Perihal / Nama Rapat", fontWeight = FontWeight.Bold) },
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                OutlinedTextField(
+                                    value = dDate,
+                                    onValueChange = { dDate = it },
+                                    label = { Text("Hari, Tanggal", fontWeight = FontWeight.Bold) },
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                OutlinedTextField(
+                                    value = dTime,
+                                    onValueChange = { dTime = it },
+                                    label = { Text("Waktu Pelaksanaan", fontWeight = FontWeight.Bold) },
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                OutlinedTextField(
+                                    value = dLocation,
+                                    onValueChange = { dLocation = it },
+                                    label = { Text("Tempat / Ruangan", fontWeight = FontWeight.Bold) },
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                
+                                // Recipient Selection column with horizontal chips
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = "Ditujukan Kepada (Pilih Cepat & Mudah Dibaca):",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState())
+                                            .padding(vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        recipientOptions.forEach { option ->
+                                            val isSelected = dGroup == option
+                                            FilterChip(
+                                                selected = isSelected,
+                                                onClick = { dGroup = option },
+                                                label = {
+                                                    Text(
+                                                        text = option,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    }
+                                    
+                                    var dGroupExpanded by remember { mutableStateOf(false) }
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        OutlinedTextField(
+                                            value = dGroup,
+                                            onValueChange = { dGroup = it },
+                                            label = { Text("Penerima Undangan (Kepada Yth)", fontWeight = FontWeight.Bold) },
+                                            trailingIcon = {
+                                                IconButton(onClick = { dGroupExpanded = !dGroupExpanded }) {
+                                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                                }
+                                            },
+                                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        DropdownMenu(
+                                            expanded = dGroupExpanded,
+                                            onDismissRequest = { dGroupExpanded = false },
+                                            modifier = Modifier.fillMaxWidth(0.9f)
+                                        ) {
+                                            recipientOptions.forEach { option ->
+                                                DropdownMenuItem(
+                                                    text = { Text(option) },
+                                                    onClick = {
+                                                        dGroup = option
+                                                        dGroupExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                OutlinedTextField(
+                                    value = dAgenda,
+                                    onValueChange = { dAgenda = it },
+                                    label = { Text("Agenda Rapat", fontWeight = FontWeight.Bold) },
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    minLines = 2
+                                )
                                 
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(top = 4.dp)
                                 ) {
-                                    Text("Status:")
+                                    Text("Status:", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
                                     val statusOptions = listOf("DRAFT", "DIKIRIM", "SELESAI")
                                     statusOptions.forEach { opt ->
                                         ElevatedFilterChip(

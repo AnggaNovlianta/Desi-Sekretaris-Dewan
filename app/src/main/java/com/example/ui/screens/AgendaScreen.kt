@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -725,68 +726,251 @@ fun AgendaScreen(
             // AGENDA DETAIL DIALOG
             if (selectedMeetingForDetail != null) {
                 val meeting = selectedMeetingForDetail!!
+                var editMode by remember { mutableStateOf(false) }
+                
+                // Fields copy for editing
+                var dTitle by remember { mutableStateOf(meeting.title) }
+                var dCategory by remember { mutableStateOf(meeting.category) }
+                var dDate by remember { mutableStateOf(meeting.date) }
+                var dTime by remember { mutableStateOf(meeting.time) }
+                var dLocation by remember { mutableStateOf(meeting.location) }
+                var dRecipientGroup by remember { mutableStateOf(meeting.recipientGroup) }
+                var dAgenda by remember { mutableStateOf(meeting.agenda) }
+
                 AlertDialog(
                     onDismissRequest = { selectedMeetingForDetail = null },
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Event, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                imageVector = if (editMode) Icons.Default.Edit else Icons.Default.Event,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(meeting.title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                text = if (editMode) "Edit Agenda Kegiatan" else meeting.title,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     },
                     text = {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 400.dp),
+                                .heightIn(max = 400.dp)
+                                .verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Category, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text("Kategori Kegiatan", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    Text(meeting.category, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
+                            if (editMode) {
+                                OutlinedTextField(
+                                    value = dTitle,
+                                    onValueChange = { dTitle = it },
+                                    label = { Text("Perihal Rapat / Kegiatan", fontWeight = FontWeight.Bold) },
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.fillMaxWidth().testTag("edit_agenda_title")
+                                )
 
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text("Tanggal & Waktu", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    Text("${meeting.date} • ${meeting.time}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Place, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text("Ruangan / Tempat", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    Text(meeting.location, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Group, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text("Peserta Agenda", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    Text(meeting.recipientGroup, style = MaterialTheme.typography.bodyMedium)
-                                }
-                            }
-
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Subject, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text("Pokok Pembahasan / Deskripsi", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    Text(
-                                        text = meeting.agenda.ifEmpty { "(Belum ada rincian bahasan)" },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        lineHeight = 18.sp
+                                // Category selection dropdown
+                                var expandedCat by remember { mutableStateOf(false) }
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = dCategory,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Kategori Kegiatan", fontWeight = FontWeight.Bold) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { expandedCat = !expandedCat }) {
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                            }
+                                        },
+                                        textStyle = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.fillMaxWidth().testTag("edit_agenda_category")
                                     )
+                                    DropdownMenu(
+                                        expanded = expandedCat,
+                                        onDismissRequest = { expandedCat = false },
+                                        modifier = Modifier.fillMaxWidth(0.8f)
+                                    ) {
+                                        categoryOptions.forEach { cat ->
+                                            DropdownMenuItem(
+                                                text = { Text(cat) },
+                                                onClick = {
+                                                    dCategory = cat
+                                                    expandedCat = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Date Selection using DatePickerDialog
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = dDate,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Tanggal Pelaksanaan", fontWeight = FontWeight.Bold) },
+                                        trailingIcon = {
+                                            IconButton(
+                                                onClick = {
+                                                    val calendar = Calendar.getInstance()
+                                                    val datePickerDialog = DatePickerDialog(
+                                                        context,
+                                                        { _, year, month, dayOfMonth ->
+                                                            val selectedCal = Calendar.getInstance().apply {
+                                                                set(Calendar.YEAR, year)
+                                                                set(Calendar.MONTH, month)
+                                                                set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                                            }
+                                                            dDate = AgendaDateUtils.formatDate(selectedCal)
+                                                        },
+                                                        calendar.get(Calendar.YEAR),
+                                                        calendar.get(Calendar.MONTH),
+                                                        calendar.get(Calendar.DAY_OF_MONTH)
+                                                    )
+                                                    datePickerDialog.show()
+                                                }
+                                            ) {
+                                                Icon(Icons.Default.CalendarMonth, contentDescription = "Buka Kalender")
+                                            }
+                                        },
+                                        textStyle = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.fillMaxWidth().testTag("edit_agenda_date")
+                                    )
+                                }
+
+                                // Time Selection using TimePickerDialog
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = dTime,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Waktu Pelaksanaan", fontWeight = FontWeight.Bold) },
+                                        trailingIcon = {
+                                            IconButton(
+                                                onClick = {
+                                                    val calendar = Calendar.getInstance()
+                                                    val timePickerDialog = TimePickerDialog(
+                                                        context,
+                                                        { _, hourOfDay, minute ->
+                                                            dTime = String.format("%02d:%02d WIB", hourOfDay, minute)
+                                                        },
+                                                        calendar.get(Calendar.HOUR_OF_DAY),
+                                                        calendar.get(Calendar.MINUTE),
+                                                        true
+                                                    )
+                                                    timePickerDialog.show()
+                                                }
+                                            ) {
+                                                Icon(Icons.Default.Schedule, contentDescription = "Buka Jam")
+                                            }
+                                        },
+                                        textStyle = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.fillMaxWidth().testTag("edit_agenda_time")
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = dLocation,
+                                    onValueChange = { dLocation = it },
+                                    label = { Text("Tempat / Lokasi Ruangan", fontWeight = FontWeight.Bold) },
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.fillMaxWidth().testTag("edit_agenda_location")
+                                )
+
+                                // Recipient selection dropdown
+                                var expandedGroupEdit by remember { mutableStateOf(false) }
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = dRecipientGroup,
+                                        onValueChange = { dRecipientGroup = it },
+                                        label = { Text("Ditujukan Kepada", fontWeight = FontWeight.Bold) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { expandedGroupEdit = !expandedGroupEdit }) {
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                            }
+                                        },
+                                        textStyle = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.fillMaxWidth().testTag("edit_agenda_recipient")
+                                    )
+                                    DropdownMenu(
+                                        expanded = expandedGroupEdit,
+                                        onDismissRequest = { expandedGroupEdit = false },
+                                        modifier = Modifier.fillMaxWidth(0.8f)
+                                    ) {
+                                        recipientOptions.forEach { group ->
+                                            DropdownMenuItem(
+                                                text = { Text(group) },
+                                                onClick = {
+                                                    dRecipientGroup = group
+                                                    expandedGroupEdit = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                OutlinedTextField(
+                                    value = dAgenda,
+                                    onValueChange = { dAgenda = it },
+                                    label = { Text("Detail Bahasan / Pokok Acara", fontWeight = FontWeight.Bold) },
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    minLines = 2,
+                                    modifier = Modifier.fillMaxWidth().testTag("edit_agenda_agenda")
+                                )
+
+                            } else {
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Category, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("Kategori Kegiatan", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                        Text(meeting.category, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("Tanggal & Waktu", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                        Text("${meeting.date} • ${meeting.time}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Place, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("Ruangan / Tempat", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                        Text(meeting.location, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Group, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("Peserta Agenda", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                        Text(meeting.recipientGroup, style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Subject, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("Pokok Pembahasan / Deskripsi", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                        Text(
+                                            text = meeting.agenda.ifEmpty { "(Belum ada rincian bahasan)" },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            lineHeight = 22.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -796,23 +980,66 @@ fun AgendaScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (userRole == "SEKWAN") {
-                                IconButton(
+                            if (editMode) {
+                                Button(
                                     onClick = {
-                                        viewModel.deleteMeeting(meeting)
-                                        selectedMeetingForDetail = null
-                                        ToastUtils.show(context, "Agenda telah dihapus")
-                                    }
+                                        if (dTitle.isBlank() || dDate.isBlank() || dTime.isBlank() || dLocation.isBlank()) {
+                                            ToastUtils.show(context, "Kolom penting tidak boleh kosong")
+                                        } else {
+                                            viewModel.updateMeeting(
+                                                meeting.copy(
+                                                    title = dTitle,
+                                                    category = dCategory,
+                                                    date = dDate,
+                                                    time = dTime,
+                                                    location = dLocation,
+                                                    recipientGroup = dRecipientGroup,
+                                                    agenda = dAgenda
+                                                )
+                                            )
+                                            selectedMeetingForDetail = null
+                                            ToastUtils.show(context, "Agenda diperbarui")
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.testTag("button_save_agenda_edit")
                                 ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Hapus Agenda", tint = Color.Red)
+                                    Text("Simpan", color = Color.White)
                                 }
-                            }
+                                TextButton(onClick = { editMode = false }) {
+                                    Text("Batal")
+                                }
+                            } else {
+                                if (userRole == "SEKWAN") {
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.deleteMeeting(meeting)
+                                            selectedMeetingForDetail = null
+                                            ToastUtils.show(context, "Agenda telah dihapus")
+                                        },
+                                        modifier = Modifier.testTag("button_delete_agenda")
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Hapus Agenda", tint = Color.Red)
+                                    }
+                                    
+                                    Button(
+                                        onClick = { editMode = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                        modifier = Modifier.testTag("button_edit_agenda")
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Edit", color = Color.White)
+                                    }
+                                }
 
-                            Button(
-                                onClick = { selectedMeetingForDetail = null },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Text("Tutup", color = Color.White)
+                                Button(
+                                    onClick = { selectedMeetingForDetail = null },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.testTag("button_close_agenda_detail")
+                                ) {
+                                    Text("Tutup", color = Color.White)
+                                }
                             }
                         }
                     }

@@ -1,6 +1,11 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import com.example.ui.ToastUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -101,12 +106,137 @@ fun RecipientsScreen(
             }
         }
     ) { paddingValues ->
-        Box(
+        var isSyncing by remember { mutableStateOf(false) }
+
+        val permissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { isGranted ->
+            if (isGranted) {
+                isSyncing = true
+                viewModel.syncDeviceContacts(
+                    context = context,
+                    onSuccess = { count ->
+                        isSyncing = false
+                        if (count > 0) {
+                            ToastUtils.show(context, "Selesai! $count kontak baru berhasil disinkronkan!")
+                        } else {
+                            ToastUtils.show(context, "Kontak handphone sudah up-to-date!")
+                        }
+                    },
+                    onFailure = { err ->
+                        isSyncing = false
+                        ToastUtils.show(context, "Gagal sinkron: $err")
+                    }
+                )
+            } else {
+                ToastUtils.show(context, "Izin membaca kontak ditolak. Silahkan aktifkan izin di pengaturan.")
+            }
+        }
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(40.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = "Sync",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Sinkronisasi Kontak HP",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Otomatis mengimpor nama & nomor telepon pimpinan dewan dari HP Anda ke DESI.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    if (isSyncing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.5.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Button(
+                            onClick = {
+                                val hasPermission = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.READ_CONTACTS
+                                ) == PackageManager.PERMISSION_GRANTED
+                                
+                                if (hasPermission) {
+                                    isSyncing = true
+                                    viewModel.syncDeviceContacts(
+                                        context = context,
+                                        onSuccess = { count ->
+                                            isSyncing = false
+                                            if (count > 0) {
+                                                ToastUtils.show(context, "Selesai! $count kontak baru disinkronkan!")
+                                            } else {
+                                                ToastUtils.show(context, "Kontak handphone sudah up-to-date!")
+                                            }
+                                        },
+                                        onFailure = { err ->
+                                            isSyncing = false
+                                            ToastUtils.show(context, "Gagal sinkron: $err")
+                                        }
+                                    )
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            Text("Sync", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                        }
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
             if (recipients.isEmpty()) {
                 Column(
                     modifier = Modifier
@@ -308,6 +438,7 @@ fun RecipientsScreen(
             }
         }
     }
+}
 }
 
 @Composable

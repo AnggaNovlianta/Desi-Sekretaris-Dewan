@@ -209,20 +209,6 @@ fun AuthScreen(viewModel: DesiViewModel) {
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Help bypass card info
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Tips Bypass Mode Offline:", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                    Text("Masuk menggunakan surel 'sekwan@desi.go.id' untuk Hak Admin atau 'anggota@desi.go.id' untuk Hak Anggota Dewan (sand bebas).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
         }
     }
 }

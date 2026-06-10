@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -8,13 +9,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.example.ui.ToastUtils
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,9 +29,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.Recipient
+import com.example.data.ChatMessage
 import com.example.ui.viewmodel.DesiViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,6 +47,7 @@ fun RecipientsScreen(
     val userRole by viewModel.userRole.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedRecipientForDetail by remember { mutableStateOf<Recipient?>(null) }
+    var activeChatRecipient by remember { mutableStateOf<Recipient?>(null) }
 
     // Forms
     var name by remember { mutableStateOf("") }
@@ -283,11 +291,13 @@ fun RecipientsScreen(
                     items(recipients) { recipient ->
                         RecipientItemCard(
                             recipient = recipient,
-                            onClick = { selectedRecipientForDetail = recipient }
+                            onClick = { selectedRecipientForDetail = recipient },
+                            onChatClick = { activeChatRecipient = recipient }
                         )
                     }
                 }
             }
+        }
 
             // ADD RECIPIENT DIALOG
             if (showAddDialog) {
@@ -436,15 +446,332 @@ fun RecipientsScreen(
                     }
                 )
             }
+
+            // INTERACTIVE CHAT DIALOG
+            if (activeChatRecipient != null) {
+                InteractiveChatDialog(
+                    recipient = activeChatRecipient!!,
+                    viewModel = viewModel,
+                    onDismiss = { activeChatRecipient = null }
+                )
+            }
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun InteractiveChatDialog(
+    recipient: Recipient,
+    viewModel: DesiViewModel,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val userEmail by viewModel.currentUserEmail.collectAsState()
+    val rawEmail = userEmail ?: "sekwan@desi.go.id"
+    val chatMessages by viewModel.chatMessagesState.collectAsState()
+    
+    val activeChatMessages = remember(chatMessages, recipient.phoneNumber, rawEmail) {
+        chatMessages.filter { msg ->
+            (msg.senderEmail == rawEmail && msg.recipientPhoneOrGroup == recipient.phoneNumber) ||
+            (msg.senderEmail == "peer_reply@desi.go.id" && msg.recipientPhoneOrGroup == rawEmail)
+        }
+    }
+
+    var messageText by remember { mutableStateOf("") }
+    var attachedDocPath by remember { mutableStateOf("") }
+    var attachedDocName by remember { mutableStateOf("") }
+
+    val chatDocPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            attachedDocPath = uri.toString()
+            attachedDocName = "File_" + (uri.lastPathSegment?.substringAfterLast("/") ?: "Lampiran.pdf")
+            ToastUtils.show(context, "Dokumen dilampirkan ke obrolan!")
+        }
+    }
+
+    val listState = rememberLazyListState()
+    LaunchedEffect(activeChatMessages.size) {
+        if (activeChatMessages.isNotEmpty()) {
+            listState.animateScrollToItem(activeChatMessages.size - 1)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .fillMaxWidth(0.95f)
+            .fillMaxHeight(0.85f),
+        content = {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Chat Header
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onDismiss) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            // Avatar Icon
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(19.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = recipient.name.take(2).uppercase(),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                // Online indicator dot
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .background(Color(0xFF2E7D32), RoundedCornerShape(5.dp))
+                                        .border(1.5.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(5.dp))
+                                        .align(Alignment.BottomEnd)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(recipient.name, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    text = "${recipient.role} • Online",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = Color(0xFF2E7D32)
+                                )
+                            }
+                        }
+                    }
+
+                    // Chat messages area
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f))
+                            .padding(horizontal = 12.dp)
+                    ) {
+                        if (activeChatMessages.isEmpty()) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Chat,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "Mulai Chat Aman DESI",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    "Kirimkan pesan langsung ke gawai para pimpinan anggota dewan. Chat otomatis memicu notifikasi push.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 24.dp)
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(top = 10.dp, bottom = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(activeChatMessages) { msg ->
+                                    val isMe = msg.senderEmail == rawEmail
+                                    val alignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
+                                    val bubbleBg = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                                    val contentColor = if (isMe) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                    
+                                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = alignment) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth(0.82f)
+                                                .background(
+                                                    color = bubbleBg,
+                                                    shape = RoundedCornerShape(
+                                                        topStart = 14.dp,
+                                                        topEnd = 14.dp,
+                                                        bottomStart = if (isMe) 14.dp else 2.dp,
+                                                        bottomEnd = if (isMe) 2.dp else 14.dp
+                                                    )
+                                                )
+                                                .border(
+                                                    width = 1.dp,
+                                                    color = if (isMe) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                                                    shape = RoundedCornerShape(14.dp)
+                                                )
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            // Handle file attachment inside chat bubble
+                                            if (msg.attachmentPath.isNotEmpty()) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .background(if (isMe) Color.Black.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                                        .clickable {
+                                                            try {
+                                                                val viewIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(msg.attachmentPath)).apply {
+                                                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                                                }
+                                                                context.startActivity(viewIntent)
+                                                            } catch (e: Exception) {
+                                                                ToastUtils.show(context, "Membuka: ${msg.attachmentName}")
+                                                            }
+                                                        }
+                                                        .padding(6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(Icons.Default.FilePresent, contentDescription = null, tint = if (isMe) Color.White else MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = msg.attachmentName.ifEmpty { "Lampiran_Berkas.pdf" },
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = if (isMe) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                            }
+                                            
+                                            Text(
+                                                text = msg.message,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = contentColor
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(msg.timestamp)),
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                color = if (isMe) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                modifier = Modifier.align(Alignment.End)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Attached view overlay
+                    if (attachedDocName.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Default.AttachFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = attachedDocName,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(onClick = {
+                                attachedDocPath = ""
+                                attachedDocName = ""
+                            }) {
+                                Icon(Icons.Default.Close, contentDescription = "Hapus", tint = Color.Red)
+                            }
+                        }
+                    }
+
+                    // Input Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { chatDocPickerLauncher.launch("*/*") }) {
+                            Icon(Icons.Default.AddCircleOutline, contentDescription = "Attach file", tint = MaterialTheme.colorScheme.primary)
+                        }
+                        
+                        OutlinedTextField(
+                            value = messageText,
+                            onValueChange = { messageText = it },
+                            placeholder = { Text("Ketik pesan pengganti WA...", style = MaterialTheme.typography.bodyMedium) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(max = 80.dp),
+                            maxLines = 4,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            ),
+                            shape = RoundedCornerShape(20.dp),
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = {
+                                if (messageText.isNotBlank() || attachedDocPath.isNotEmpty()) {
+                                    viewModel.sendChatMessage(
+                                        recipientPhoneOrGroup = recipient.phoneNumber,
+                                        messageText = messageText,
+                                        attachmentPath = attachedDocPath,
+                                        attachmentName = attachedDocName,
+                                        peerName = recipient.name,
+                                        peerRole = recipient.role
+                                    )
+                                    messageText = ""
+                                    attachedDocPath = ""
+                                    attachedDocName = ""
+                                }
+                            },
+                            enabled = messageText.isNotBlank() || attachedDocPath.isNotEmpty()
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send",
+                                tint = if (messageText.isNotBlank() || attachedDocPath.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
 
 @Composable
 fun RecipientItemCard(
     recipient: Recipient,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onChatClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -490,12 +817,26 @@ fun RecipientItemCard(
                 )
             }
             if (recipient.phoneNumber.isNotEmpty()) {
-                Icon(
-                    imageVector = Icons.Default.PhoneEnabled,
-                    contentDescription = "Active Contact",
-                    tint = Color(0xFF2E7D32),
-                    modifier = Modifier.size(16.dp)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onChatClick,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Chat,
+                            contentDescription = "Chat",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.PhoneEnabled,
+                        contentDescription = "Active Contact",
+                        tint = Color(0xFF2E7D32),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
     }

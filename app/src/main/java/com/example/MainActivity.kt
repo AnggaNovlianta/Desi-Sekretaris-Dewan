@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
                 // Initialize Room DB & Repository
                 val database = recuerDatabaseInstance()
                 val repository = remember {
-                    AppRepository(database.meetingDao(), database.recipientDao())
+                    AppRepository(database.meetingDao(), database.recipientDao(), database.chatDao())
                 }
                 
                 // Set Up ViewModel using custom Factory

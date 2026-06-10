@@ -10,6 +10,7 @@ import com.example.data.AppRepository
 import com.example.data.GeminiService
 import com.example.data.Meeting
 import com.example.data.Recipient
+import com.example.data.ChatMessage
 import com.example.data.FirestoreSyncManager
 import com.example.data.FirebaseAuthManager
 import kotlinx.coroutines.flow.*
@@ -76,6 +77,76 @@ class DesiViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    // Chat Messages Stream
+    val chatMessagesState: StateFlow<List<ChatMessage>> = repository.allChatMessages
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // Clear private chat history helper
+    fun clearChatHistory() {
+        viewModelScope.launch {
+            repository.clearAllChatMessages()
+            addSyncLog("Sistem: Riwayat percakapan berhasil dibersihkan.")
+        }
+    }
+
+    // Direct WhatsApp replacement messaging logic
+    fun sendChatMessage(
+        recipientPhoneOrGroup: String,
+        messageText: String,
+        attachmentPath: String = "",
+        attachmentName: String = "",
+        peerName: String = "",
+        peerRole: String = ""
+    ) {
+        val userEmail = currentUserEmail.value ?: "sekwan@desi.go.id"
+        viewModelScope.launch {
+            val userMsg = ChatMessage(
+                senderEmail = userEmail,
+                recipientPhoneOrGroup = recipientPhoneOrGroup,
+                message = messageText,
+                attachmentPath = attachmentPath,
+                attachmentName = attachmentName
+            )
+            repository.insertChatMessage(userMsg)
+            addSyncLog("Pesan Terkirim: Dikirimkan langsung ke ${peerName.ifEmpty { recipientPhoneOrGroup }}")
+
+            // Simulate Peer Response asynchronously
+            if (peerName.isNotEmpty() && peerRole.isNotEmpty()) {
+                kotlinx.coroutines.delay(1200) // Brief realistic typing delay
+                val replyText = GeminiService.generateChatReply(
+                    recipientName = peerName,
+                    recipientRole = peerRole,
+                    userMessage = messageText
+                )
+                val replyMsg = ChatMessage(
+                    senderEmail = "peer_reply@desi.go.id",
+                    recipientPhoneOrGroup = userEmail,
+                    message = replyText
+                )
+                repository.insertChatMessage(replyMsg)
+                
+                // Trigger real-time device push style notification
+                com.example.ui.NotificationHelper.showNotification(
+                    getApplication(),
+                    "Pesan baru dari $peerName",
+                    replyText
+                )
+                
+                // Log and update notification feeds
+                addNotificationAlert(
+                    title = "Pesan baru dari $peerName",
+                    body = replyText,
+                    type = "INFO"
+                )
+                addSyncLog("Pesan Masuk: $peerName membalas secara real-time.")
+            }
+        }
+    }
 
     // UI Loading State
     private val _isLoading = MutableStateFlow(false)
@@ -365,6 +436,21 @@ class DesiViewModel(
             FirestoreSyncManager.syncMeetingToCloud(finalMeeting) { logMsg ->
                 addSyncLog(logMsg)
             }
+            
+            // Trigger device notification check
+            if (finalMeeting.status == "DIKIRIM") {
+                com.example.ui.NotificationHelper.showNotification(
+                    getApplication(),
+                    "Undangan Masuk: ${finalMeeting.title}",
+                    "Undangan menghadiri agenda rapat resmi baru saja dikirim langsung oleh Sekwan ke aplikasi Anda."
+                )
+                addNotificationAlert(
+                    title = "Undangan Rapat Masuk",
+                    body = "Undangan Rapat: '${finalMeeting.title}' telah diterbitkan.",
+                    type = "NEW_MEETING"
+                )
+                addSyncLog("Notifikasi: Undangan dikirimkan langsung ke aplikasi Dewanku!")
+            }
             triggerSimulatedSync(silent = true)
         }
     }
@@ -377,6 +463,21 @@ class DesiViewModel(
             addSyncLog("Unggah: Perubahan agenda '${meeting.title}' disinkronkan ke awan.")
             FirestoreSyncManager.syncMeetingToCloud(meeting) { logMsg ->
                 addSyncLog(logMsg)
+            }
+            
+            // Trigger device notification check
+            if (meeting.status == "DIKIRIM") {
+                com.example.ui.NotificationHelper.showNotification(
+                    getApplication(),
+                    "Pembaruan Undangan: ${meeting.title}",
+                    "Pembaruan agenda rapat resmi ${meeting.category} (" + meeting.location + ") telah disinkronkan."
+                )
+                addNotificationAlert(
+                    title = "Pembaruan Undangan Rapat",
+                    body = "Undangan Rapat: '${meeting.title}' diperbarui di aplikasi.",
+                    type = "SCHEDULE_CHANGE"
+                )
+                addSyncLog("Notifikasi: Perubahan undangan dikirimkan langsung ke aplikasi Dewanku!")
             }
             triggerSimulatedSync(silent = true)
         }

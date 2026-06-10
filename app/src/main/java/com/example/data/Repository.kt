@@ -4,8 +4,24 @@ import kotlinx.coroutines.flow.Flow
 
 class AppRepository(
     private val meetingDao: MeetingDao,
-    private val recipientDao: RecipientDao
+    private val recipientDao: RecipientDao,
+    private val chatDao: ChatDao
 ) {
+    // Chat messages
+    val allChatMessages: Flow<List<ChatMessage>> = chatDao.getAllMessages()
+
+    suspend fun insertChatMessage(message: ChatMessage): Long {
+        return chatDao.insertMessage(message)
+    }
+
+    suspend fun deleteChatMessageById(id: Int) {
+        chatDao.deleteMessageById(id)
+    }
+
+    suspend fun clearAllChatMessages() {
+        chatDao.clearAllMessages()
+    }
+
     // Meetings
     val allMeetings: Flow<List<Meeting>> = meetingDao.getAllMeetings()
 

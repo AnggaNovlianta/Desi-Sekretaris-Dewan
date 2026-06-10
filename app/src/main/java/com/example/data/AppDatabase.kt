@@ -19,6 +19,8 @@ data class Meeting(
     val aiSummary: String = "", // Ringkasan otomatis dari Gemini
     val category: String = "Rapat Intern", // Kategori kegiatan (e.g., "Rapat Paripurna", "Rapat Komisi", etc.)
     val attendanceStatus: String = "", // format "recipientId:status;recipientId:status;..."
+    val documentPath: String = "", // Path / URI of attached hardcopy document
+    val documentName: String = "", // Display/filename of hardcopy document
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -70,10 +72,38 @@ interface RecipientDao {
     suspend fun deleteRecipientById(id: Int)
 }
 
-@Database(entities = [Meeting::class, Recipient::class], version = 3, exportSchema = false)
+@Entity(tableName = "chat_messages")
+data class ChatMessage(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val senderEmail: String,
+    val recipientPhoneOrGroup: String, // Phone, group name or specific recipient's tag
+    val message: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false,
+    val attachmentPath: String = "",
+    val attachmentName: String = ""
+)
+
+@Dao
+interface ChatDao {
+    @Query("SELECT * FROM chat_messages ORDER BY timestamp ASC")
+    fun getAllMessages(): Flow<List<ChatMessage>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMessage(message: ChatMessage): Long
+
+    @Query("DELETE FROM chat_messages WHERE id = :id")
+    suspend fun deleteMessageById(id: Int)
+
+    @Query("DELETE FROM chat_messages")
+    suspend fun clearAllMessages()
+}
+
+@Database(entities = [Meeting::class, Recipient::class, ChatMessage::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun meetingDao(): MeetingDao
     abstract fun recipientDao(): RecipientDao
+    abstract fun chatDao(): ChatDao
 
     companion object {
         @Volatile

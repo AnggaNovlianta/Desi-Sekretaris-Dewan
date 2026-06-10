@@ -185,6 +185,38 @@ Pastikan bahasa yang ditulis sepenuhnya dalam Bahasa Indonesia resmi yang santun
         return generateContent(prompt)
     }
 
+    /**
+     * Membangun balasan chat otomatis bersimulasi tinggi berdasarkan peran kontak.
+     */
+    suspend fun generateChatReply(
+        recipientName: String,
+        recipientRole: String,
+        userMessage: String
+    ): String {
+        val systemInstruction = "Anda adalah $recipientName, dengan jabatan sebagai $recipientRole di Kota Prabumulih / DPRD Prabumulih. " +
+                "Balas pesan chat internal aplikasi DESI (pengganti WhatsApp legislatif) yang dikirimkan oleh rekan dewan dengan gaya bahasa yang sesuai dengan karakter jabatan Anda (sopan, lugas, resmi pemerintahan, bersedia sinergi, santun). Balasan harus sangat ringkas, maksimal 2 kalimat, dan berbahasa Indonesia yang baik."
+        val apiKey = BuildConfig.GEMINI_API_KEY
+        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
+            // Local fallback simulation based on message keywords
+            val msgToLower = userMessage.lowercase()
+            return when {
+                msgToLower.contains("undangan") || msgToLower.contains("rapat") -> {
+                    "Siap, terima kasih informasinya Bapak/Ibu. Insya Allah saya akan hadir tepat waktu."
+                }
+                msgToLower.contains("notulen") || msgToLower.contains("hasil") -> {
+                    "Baik, sudah saya baca hasil notulensi rapat tersebut. Terima kasih atas laporannya."
+                }
+                msgToLower.contains("dokumen") || msgToLower.contains("berkas") || msgToLower.contains("file") -> {
+                    "Terima kasih atas kiriman dokumennya. Saya akan segera pelajari bersama tim."
+                }
+                else -> {
+                    "Baik, terima kasih atas pesannya koordinasi ini. Mari kita bersinergi demi kemajuan Kota Prabumulih."
+                }
+            }
+        }
+        return generateContent(prompt = userMessage, systemInstruction = systemInstruction)
+    }
+
     private fun generateSimulatedResponse(prompt: String): String {
         // Extract values from prompt
         val title = "Perihal / Acara:\\s*([^\\n]+)".toRegex(RegexOption.IGNORE_CASE).find(prompt)?.groupValues?.get(1)

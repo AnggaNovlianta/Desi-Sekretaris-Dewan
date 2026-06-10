@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import com.example.ui.ToastUtils
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -95,6 +99,18 @@ fun InvitationsScreen(
     var location by remember { mutableStateOf("") }
     var agenda by remember { mutableStateOf("") }
     var recipientGroup by remember { mutableStateOf("Seluruh Anggota DPRD") }
+    var documentPath by remember { mutableStateOf("") }
+    var documentName by remember { mutableStateOf("") }
+
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            documentPath = uri.toString()
+            documentName = "Hardcopy_" + (uri.lastPathSegment?.substringAfterLast("/") ?: "Dokumen.pdf")
+            ToastUtils.show(context, "Dokumen hardcopy berhasil dilampirkan!")
+        }
+    }
     
     val recipientOptions = listOf(
         "Seluruh Anggota DPRD",
@@ -166,7 +182,15 @@ fun InvitationsScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            if (meetings.isEmpty()) {
+            val filteredMeetings = remember(meetings, userRole) {
+                if (userRole == "ANGGOTA") {
+                    meetings.filter { it.status == "DIKIRIM" || it.status == "SELESAI" }
+                } else {
+                    meetings
+                }
+            }
+
+            if (filteredMeetings.isEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -182,13 +206,13 @@ fun InvitationsScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Belum ada undangan rapat",
+                        text = if (userRole == "ANGGOTA") "Kotak Masuk Undangan Bersih" else "Belum ada undangan rapat",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Kelola dan kirimkan draf undangan DPRD Kota Prabumulih di sini.",
+                        text = if (userRole == "ANGGOTA") "Menunggu undangan rapat resmi didepositkan langsung oleh Sekretaris Dewan." else "Kelola dan kirimkan draf undangan DPRD Kota Prabumulih di sini.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                         textAlign = TextAlign.Center
@@ -209,7 +233,7 @@ fun InvitationsScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(meetings) { meeting ->
+                    items(filteredMeetings) { meeting ->
                         InvitationItemCard(
                             meeting = meeting,
                             onClick = { selectedMeetingForDetail = meeting },
@@ -387,6 +411,52 @@ fun InvitationsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 minLines = 2
                             )
+
+                            // Document Upload Component for Hardcopy attachment
+                            OutlinedCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.AttachFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text("Berkas Hardcopy Undangan", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp))
+                                            Text(
+                                                text = if (documentName.isNotEmpty()) documentName else "Lampirkan PDF/Gambar (Maks. 10MB)",
+                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                                color = if (documentName.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    if (documentName.isNotEmpty()) {
+                                        IconButton(onClick = {
+                                            documentPath = ""
+                                            documentName = ""
+                                        }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete attachment", tint = Color.Red)
+                                        }
+                                    } else {
+                                        Button(
+                                            onClick = { documentPickerLauncher.launch("*/*") },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text("Unggahi", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     },
                     confirmButton = {
@@ -415,7 +485,7 @@ fun InvitationsScreen(
                                 Text("Draf AI", color = Color.White)
                             }
 
-                            Button(
+                             Button(
                                 onClick = {
                                     if (title.isNotBlank()) {
                                         val newMeeting = Meeting(
@@ -425,7 +495,9 @@ fun InvitationsScreen(
                                             location = location,
                                             agenda = agenda,
                                             recipientGroup = recipientGroup,
-                                            status = "DRAFT"
+                                            status = "DRAFT",
+                                            documentPath = documentPath,
+                                            documentName = documentName
                                         )
                                         viewModel.saveMeeting(newMeeting)
                                         showAddDialog = false
@@ -435,6 +507,8 @@ fun InvitationsScreen(
                                         time = ""
                                         location = ""
                                         agenda = ""
+                                        documentPath = ""
+                                        documentName = ""
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -635,6 +709,59 @@ fun InvitationsScreen(
                                                 else -> Color(0xFFE65100)
                                             }
                                         )
+                                    }
+                                }
+
+                                // Document Display / Viewer attachment card
+                                if (meeting.documentPath.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Dokumen Hardcopy Resmi:", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = Color(0xFFC62828), modifier = Modifier.size(24.dp))
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column {
+                                                    Text(
+                                                        text = meeting.documentName.ifEmpty { "Lampiran_Undangan.pdf" },
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text("Jenis: Berkas Hardcopy", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Button(
+                                                onClick = {
+                                                    try {
+                                                        val viewIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(meeting.documentPath)).apply {
+                                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                                        }
+                                                        context.startActivity(viewIntent)
+                                                    } catch (e: Exception) {
+                                                        ToastUtils.show(context, "Membuka Dokumen: ${meeting.documentName}")
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color.White)
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Buka", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                                            }
+                                        }
                                     }
                                 }
 

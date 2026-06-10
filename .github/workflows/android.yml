@@ -2,9 +2,9 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main", "main" ] # Sesuaikan dengan nama branch utama Anda
+    branches: [ "main", "master" ] # Sesuaikan dengan nama branch utama Anda
   pull_request:
-    branches: [ "main", "main" ]
+    branches: [ "main", "master" ]
 
 jobs:
   build:

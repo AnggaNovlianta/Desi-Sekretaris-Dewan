@@ -1,8 +1,8 @@
-name: Build Android APK
+name: Android CI Build APK
 
 on:
   push:
-    branches: [ "main", "master" ] # Sesuaikan dengan nama branch utama Anda
+    branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
 
@@ -11,22 +11,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
+    # 1. Checkout kode repositori Anda
+    - name: Checkout Source Code
       uses: actions/checkout@v4
 
+    # 2. Set up JDK (Java Development Kit) Versi 17 yang direkomendasikan untuk proyek Gradle modern ini
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
-        java-version: '17'
         distribution: 'temurin'
-        cache: gradle
+        java-version: '17'
+        cache: 'gradle' # Mengaktifkan caching otomatis untuk mempercepat build selanjutnya
 
-    - name: Grant Execute Permission to Gradlew
+    # 3. Memberikan izin eksekusi pada gradlew (Sekarang aman dilakukan karena gradlew sudah ada)
+    - name: Grant Execute Permission for Gradle Wrapper
       run: chmod +x gradlew
 
+    # 4. Melakukan kompilasi dan build APK (Debug mode)
     - name: Build with Gradle
       run: ./gradlew assembleDebug
 
+    # 5. Mengambil file APK yang berhasil di-build dan menyimpannya sebagai download link/artifact di GitHub
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
